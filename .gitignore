@@ -1,0 +1,20 @@
+# Claude Code
+.claude/
+
+# Encryption key — never commit this
+vault.key
+
+# Backup files
+backups/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Logs
+logs/
+*.log

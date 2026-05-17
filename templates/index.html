@@ -1,0 +1,1526 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DBVault — Gestor de Backups SQL</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div class="logo-name">DBVault</div>
+    <div class="logo-sub">v1.0 · MySQL backups0</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active" onclick="showSection('dashboard', this)">
+      <div class="nav-dot"></div> Dashboard
+    </div>
+    <div class="nav-item" id="nav-users" onclick="showSection('users', this)" style="display:none;" data-admin-only>
+      <div class="nav-dot"></div> Usuarios
+    </div>
+    <div class="nav-item" onclick="showSection('connections', this)">
+      <div class="nav-dot"></div> Conexiones
+    </div>
+    <div class="nav-item" onclick="showSection('backups', this)">
+      <div class="nav-dot"></div> Backups
+    </div>
+    <div class="nav-item" onclick="showSection('schedules', this)">
+      <div class="nav-dot"></div> Schedules
+    </div>
+    <div class="nav-item" onclick="showSection('restore', this)" data-no-readonly>
+      <div class="nav-dot"></div> Restaurar
+    </div>
+    <div class="nav-item" id="nav-logs" onclick="showSection('logs', this)" data-no-readonly>
+      <div class="nav-dot"></div> Logs
+    </div>
+  </nav>
+  <div class="sidebar-user">
+    <div class="sidebar-user-top">
+      <span class="sidebar-username" id="sidebar-username">—</span>
+      <span class="sidebar-role-badge" id="sidebar-role-badge">—</span>
+    </div>
+  </div>
+  <div class="sidebar-bottom">
+    <span>AES-256 · SHA-256</span>
+    <button onclick="logout()" title="Cerrar sesión" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 4px;border-radius:4px;font-size:14px;line-height:1;transition:color 0.15s;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">&#x23FB;</button>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <!-- DASHBOARD -->
+  <div id="section-dashboard" class="section active">
+    <div class="topbar">
+      <div class="topbar-title">Dashboard</div>
+      <div class="topbar-actions">
+        <button class="btn btn-outline" onclick="refreshAll()">Actualizar</button>
+        <button class="btn btn-primary" data-backup-role onclick="openBackupModal()">+ Nuevo Backup</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Backups</div>
+          <div class="stat-value" id="stat-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Cifrados</div>
+          <div class="stat-value" id="stat-enc">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Tamaño Total</div>
+          <div class="stat-value" id="stat-size">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Conexiones</div>
+          <div class="stat-value" id="stat-conns">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Schedules Activos</div>
+          <div class="stat-value" id="stat-sched">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Fallidos</div>
+          <div class="stat-value" id="stat-fail">—</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Ultimos Backups</span>
+            </div>
+            <div class="table-wrap" id="dash-backups-table">
+              <div class="empty"><div class="empty-title">Sin backups</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CPU + RAM gauges -->
+      <div class="charts-grid">
+        <div class="gauge-card">
+          <div class="gauge-title">Uso de CPU</div>
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 110 110" width="110" height="110">
+              <circle cx="55" cy="55" r="44" fill="none" stroke="var(--border)" stroke-width="9"/>
+              <circle id="cpu-arc" cx="55" cy="55" r="44" fill="none" stroke="var(--accent)" stroke-width="9"
+                stroke-dasharray="276.46" stroke-dashoffset="276.46" stroke-linecap="round"
+                style="transition:stroke-dashoffset 0.7s ease;"/>
+            </svg>
+            <div class="gauge-label">
+              <span class="gauge-pct" id="cpu-pct">—</span>
+              <span class="gauge-sub">CPU</span>
+            </div>
+          </div>
+          <div class="gauge-detail">
+            <span id="cpu-cores">— núcleos</span>
+            <span id="cpu-freq">—</span>
+          </div>
+        </div>
+
+        <div class="gauge-card">
+          <div class="gauge-title">Memoria RAM</div>
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 110 110" width="110" height="110">
+              <circle cx="55" cy="55" r="44" fill="none" stroke="var(--border)" stroke-width="9"/>
+              <circle id="mem-arc" cx="55" cy="55" r="44" fill="none" stroke="var(--green)" stroke-width="9"
+                stroke-dasharray="276.46" stroke-dashoffset="276.46" stroke-linecap="round"
+                style="transition:stroke-dashoffset 0.7s ease;"/>
+            </svg>
+            <div class="gauge-label">
+              <span class="gauge-pct" id="mem-pct">—</span>
+              <span class="gauge-sub">RAM</span>
+            </div>
+          </div>
+          <div class="gauge-detail">
+            <span id="mem-used">—</span>
+            <span id="mem-total">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Disk usage -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-header">
+          <span class="card-title">Espacio en Disco</span>
+          <span class="mono" id="disk-path" style="font-size:11px;color:var(--text3);"></span>
+        </div>
+        <div style="padding:14px 18px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);color:var(--text2);">
+            <span id="disk-used-label">—</span>
+            <span id="disk-total-label" style="color:var(--text3);">—</span>
+          </div>
+          <div class="disk-bar-track"><div class="disk-bar-fill" id="disk-bar"></div></div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);">
+            <span id="disk-pct-label">—</span> utilizado &nbsp;·&nbsp; <span id="disk-free-label">—</span> libre
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONNECTIONS -->
+  <div id="section-connections" class="section">
+    <div class="topbar">
+      <div class="topbar-title">Conexiones SQL</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" data-admin-only onclick="openConnModal()">+ Nueva Conexion</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="card">
+        <div class="table-wrap" id="conn-table">
+          <div class="empty"><div class="empty-title">Sin conexiones</div><div class="empty-sub">Agrega tu primera conexion SQL</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BACKUPS -->
+  <div id="section-backups" class="section">
+    <div class="topbar">
+      <div class="topbar-title">Catalogo de Backups</div>
+      <div class="topbar-actions">
+        <select id="backup-filter-conn" onchange="loadBackups()" style="width:170px;">
+          <option value="">Todas las conexiones</option>
+        </select>
+        <button class="btn btn-primary" data-backup-role onclick="openBackupModal()">+ Nuevo Backup</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="card">
+        <div class="table-wrap" id="backups-table">
+          <div class="empty"><div class="empty-title">Sin backups</div><div class="empty-sub">Crea tu primer backup cifrado</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHEDULES -->
+  <div id="section-schedules" class="section">
+    <div class="topbar">
+      <div class="topbar-title">Backups Automaticos</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" data-backup-role onclick="openScheduleModal()">+ Nuevo Schedule</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="card">
+        <div class="table-wrap" id="schedules-table">
+          <div class="empty"><div class="empty-title">Sin schedules</div><div class="empty-sub">Programa backups automaticos cifrados</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESTORE -->
+  <div id="section-restore" class="section">
+    <div class="topbar">
+      <div class="topbar-title">Restaurar Backup</div>
+    </div>
+    <div class="content">
+      <div class="card" style="max-width:560px;">
+        <div class="modal-header" style="border:none;padding-bottom:6px;">
+          <span class="modal-title">Configurar Restauracion</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Backup a restaurar</label>
+              <select id="restore-backup-id">
+                <option value="">Selecciona un backup...</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label>Conexion destino</label>
+              <select id="restore-conn-id">
+                <option value="">Selecciona la conexion destino...</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label>Tu clave personal <span style="color:var(--text3);font-weight:400;">(autoriza y descifra el backup)</span></label>
+              <input type="password" id="restore-user-key" placeholder="Clave asignada por el administrador">
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="alert alert-info">
+            Advertencia: La restauracion sobreescribira los datos existentes en la base de datos destino.
+          </div>
+        </div>
+        <div class="modal-footer" style="border:none;padding-top:0;">
+          <button class="btn btn-primary" data-backup-role onclick="doRestore()">Restaurar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- USUARIOS (admin only) -->
+  <div id="section-users" class="section">
+    <div class="topbar">
+      <div class="topbar-title">Gestión de Usuarios</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" onclick="openUserModal()">+ Nuevo Usuario</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><span class="card-title">Roles disponibles</span></div>
+        <div id="roles-display" style="padding:14px 18px;display:flex;gap:20px;font-size:12px;color:var(--text2);flex-wrap:wrap;"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="users-table">
+          <div class="empty"><div class="empty-title">Cargando usuarios...</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div id="section-logs" class="section">
+    <div class="topbar">
+      <div class="topbar-title">Registro de Actividad</div>
+      <div class="topbar-actions">
+        <button class="btn btn-outline" onclick="loadLogs()">Actualizar</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="card">
+        <div class="log-filters">
+          <span class="log-filters-label">Categoría</span>
+          <button class="filter-chip active" onclick="filterLogs('all', this)">Todos</button>
+          <button class="filter-chip" onclick="filterLogs('login', this)">Login</button>
+          <button class="filter-chip" onclick="filterLogs('logout', this)">Logout</button>
+          <button class="filter-chip" onclick="filterLogs('backup', this)">Backups</button>
+          <button class="filter-chip" onclick="filterLogs('connection', this)">Conexiones</button>
+          <button class="filter-chip" onclick="filterLogs('restore', this)">Restauraciones</button>
+        </div>
+        <div class="log-filters-row">
+          <span class="log-filters-label">Nivel</span>
+          <button class="filter-chip level-chip active" onclick="filterByLevel('all', this)">Todos</button>
+          <button class="filter-chip level-chip" onclick="filterByLevel('info', this)">Info</button>
+          <button class="filter-chip level-chip" onclick="filterByLevel('warn', this)">Warn</button>
+          <button class="filter-chip level-chip" onclick="filterByLevel('error', this)">Error</button>
+          <button class="filter-chip level-chip" onclick="filterByLevel('notice', this)">Notice</button>
+        </div>
+        <div class="log-filters-row">
+          <span class="log-filters-label">Fechas</span>
+          <input type="date" id="log-date-from" class="log-date-input" title="Desde" onchange="applyDateFilter()">
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono);">â†’</span>
+          <input type="date" id="log-date-to" class="log-date-input" title="Hasta" onchange="applyDateFilter()">
+          <button class="log-date-clear" onclick="clearDateFilter()">Limpiar</button>
+        </div>
+        <div id="logs-container">
+          <div class="empty"><div class="empty-title">Sin logs</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- â”€â”€â”€ MODALS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+
+<!-- Connection Modal -->
+<div class="modal-backdrop" id="conn-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="conn-modal-title">Nueva Conexion SQL</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('conn-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div id="conn-test-result" style="display:none;margin-bottom:12px;"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Nombre de conexion</label>
+          <input id="c-name" placeholder="Mi servidor principal">
+        </div>
+        <div class="form-group full">
+          <label>Tipo de base de datos</label>
+          <select id="c-type" onchange="toggleConnFields()">
+            <option value="mysql">MySQL / MariaDB</option>
+            <option value="postgresql">PostgreSQL</option>
+            <option value="sqlite">SQLite (local)</option>
+          </select>
+        </div>
+        <div class="form-group" id="f-host">
+          <label>Host</label>
+          <input id="c-host" value="localhost" placeholder="localhost">
+        </div>
+        <div class="form-group" id="f-port">
+          <label>Puerto</label>
+          <input id="c-port" value="3306" type="number">
+        </div>
+        <div class="form-group full" id="f-db">
+          <label>Base de datos / Ruta</label>
+          <input id="c-db" placeholder="nombre_db o /ruta/archivo.db">
+        </div>
+        <div class="form-group" id="f-user">
+          <label>Usuario</label>
+          <input id="c-user" placeholder="root">
+        </div>
+        <div class="form-group" id="f-pass">
+          <label>Contrasena <span id="c-pass-hint" style="display:none;color:var(--text3);font-weight:400;">(dejar vacío mantiene la actual)</span></label>
+          <input id="c-pass" type="password" placeholder="••••••••">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="testConnection()">Probar conexion</button>
+      <button class="btn btn-primary" onclick="saveConnection()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup Modal -->
+<div class="modal-backdrop" id="backup-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Crear Backup</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('backup-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div id="backup-result" style="display:none;margin-bottom:12px;"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Conexion</label>
+          <select id="b-conn">
+            <option value="">Selecciona una conexion...</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Tu clave personal <span style="color:var(--text3);font-weight:400;">(autoriza y cifra el backup)</span></label>
+          <input type="password" id="b-user-key" placeholder="Clave asignada por el administrador">
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Cifrar backup (AES-256)</div>
+          <div class="toggle-sub">Usando PBKDF2 + Fernet con tu clave personal</div>
+        </div>
+        <div class="toggle on" id="t-encrypt" onclick="toggleOpt('t-encrypt')"></div>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Comprimir (gzip)</div>
+          <div class="toggle-sub">Reduce el tamano del archivo</div>
+        </div>
+        <div class="toggle on" id="t-compress" onclick="toggleOpt('t-compress')"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('backup-modal')">Cancelar</button>
+      <button class="btn btn-primary" id="backup-submit-btn" onclick="doBackup()">Crear Backup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal-backdrop" id="schedule-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Programar Backup Automatico</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('schedule-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Conexion</label>
+          <select id="s-conn">
+            <option value="">Selecciona una conexion...</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Frecuencia</label>
+          <select id="s-freq" onchange="onFreqChange()">
+            <option value="hourly">Cada hora</option>
+            <option value="daily" selected>Diario</option>
+            <option value="weekly">Semanal</option>
+            <option value="once">Una vez (fecha especifica)</option>
+          </select>
+        </div>
+        <div class="form-group" id="s-time-row">
+          <label id="s-time-label">Hora de ejecucion</label>
+          <input id="s-time" type="time" value="00:00">
+        </div>
+        <div class="form-group" id="s-date-row" style="display:none;">
+          <label>Fecha</label>
+          <input id="s-date" type="date">
+        </div>
+        <div class="form-group">
+          <label>Retencion (dias)</label>
+          <input id="s-retain" type="number" value="30">
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Cifrar</div></div>
+        <div class="toggle on" id="ts-enc" onclick="toggleOpt('ts-enc')"></div>
+      </div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">Comprimir</div></div>
+        <div class="toggle on" id="ts-comp" onclick="toggleOpt('ts-comp')"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('schedule-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveSchedule()">Programar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Verify Modal -->
+<div class="modal-backdrop" id="verify-modal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">Verificar Backup</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('verify-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div id="verify-key-row" class="form-group" style="margin-bottom:12px;">
+        <label>Clave personal <span style="color:var(--text3);font-weight:400;">(solo si el backup está cifrado)</span></label>
+        <input type="password" id="verify-key-input" placeholder="Dejar vacío si no está cifrado" autocomplete="off">
+      </div>
+      <div id="verify-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('verify-modal')">Cerrar</button>
+      <button class="btn btn-primary" id="verify-submit-btn" onclick="submitVerify()">Verificar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Download Modal -->
+<div class="modal-backdrop" id="download-modal">
+  <div class="modal" style="width:440px;">
+    <div class="modal-header">
+      <span class="modal-title">Descargar Backup</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('download-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div id="dl-backup-info" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:12px;font-family:var(--mono);color:var(--text2);"></div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Tu clave personal <span style="color:var(--text3);font-weight:400;">(requerida para autorizar)</span></label>
+        <input type="password" id="dl-user-key" placeholder="Tu clave única de usuario">
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Formato de descarga</div>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;">
+          <input type="radio" name="dl-format" value="original" checked style="margin-top:3px;width:auto;">
+          <div>
+            <div style="font-size:13px;color:var(--text);">Original <span class="badge badge-purple" style="margin-left:4px;">Cifrado</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Descarga el archivo tal como está almacenado</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+          <input type="radio" name="dl-format" value="decrypt" id="dl-radio-decrypt" style="margin-top:3px;width:auto;">
+          <div>
+            <div style="font-size:13px;color:var(--text);">Sin cifrado <span class="badge badge-green" style="margin-left:4px;">SQL plano</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Descifra antes de descargar usando tu clave personal</div>
+          </div>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('download-modal')">Cancelar</button>
+      <button class="btn btn-primary" id="dl-submit-btn" onclick="doDownload()">Descargar</button>
+    </div>
+  </div>
+</div>
+
+<!-- User Key Modal (admin assigns key) -->
+<div class="modal-backdrop" id="key-modal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">Asignar Clave de Usuario</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('key-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div id="key-modal-result" style="display:none;margin-bottom:12px;"></div>
+      <div style="margin-bottom:14px;font-size:13px;color:var(--text2);">
+        Usuario: <b id="key-modal-username"></b>
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Nueva clave <span style="color:var(--text3);font-weight:400;">(mínimo 8 caracteres)</span></label>
+        <input type="password" id="key-modal-value" placeholder="Escribe la clave o deja vacío para generar automáticamente" autocomplete="new-password">
+      </div>
+      <div class="alert alert-info" style="margin-bottom:0;font-size:12px;">
+        Esta clave se usará para autorizar operaciones de backup y como contraseña de cifrado. Compártela con el usuario de forma segura.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('key-modal')">Cancelar</button>
+      <button class="btn btn-outline" onclick="setKeyModal('')" style="color:var(--accent);border-color:var(--accent);">Generar aleatoria</button>
+      <button class="btn btn-primary" onclick="saveUserKey()">Asignar Clave</button>
+    </div>
+  </div>
+</div>
+
+<!-- User Create Modal -->
+<div class="modal-backdrop" id="user-modal">
+  <div class="modal" style="width:400px;">
+    <div class="modal-header">
+      <span class="modal-title">Nuevo Usuario</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('user-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div id="user-modal-result" style="display:none;margin-bottom:12px;"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Nombre de usuario</label>
+          <input id="u-username" placeholder="nombre_usuario">
+        </div>
+        <div class="form-group full">
+          <label>Contraseña</label>
+          <input type="password" id="u-password" placeholder="••••••••">
+        </div>
+        <div class="form-group full">
+          <label>Tipo de usuario</label>
+          <select id="u-role"></select>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="alert alert-info" style="margin-bottom:0;">
+        Se generará automáticamente una clave única para este usuario al crearlo.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('user-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser()">Crear Usuario</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let connections = [];
+let backups = [];
+let currentUser = { id: null, username: '', role: 0, role_name: '', user_key: '' };
+let appRoles = [];
+let pendingDownload = { id: null, filename: '', encrypted: false, compressed: false };
+
+// â”€â”€â”€ Auth & Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function logout() {
+  await fetch('/api/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (res.status === 401) { window.location.href = '/login'; return null; }
+  return res;
+}
+
+async function initApp() {
+  const [rMe, rRoles] = await Promise.all([apiFetch('/api/me'), apiFetch('/api/roles')]);
+  if (!rMe) return;
+  currentUser = await rMe.json();
+  if (rRoles) appRoles = await rRoles.json();
+
+  // Sidebar user info
+  document.getElementById('sidebar-username').textContent = currentUser.username;
+  const badge = document.getElementById('sidebar-role-badge');
+  badge.textContent = currentUser.role_name;
+  badge.className = `sidebar-role-badge role-${currentUser.role}`;
+
+  // Roles disponibles section
+  const roleColors = { 0: 'badge-blue', 1: 'badge-green', 2: 'badge-amber' };
+  const rolesEl = document.getElementById('roles-display');
+  if (rolesEl && appRoles.length) {
+    rolesEl.innerHTML = appRoles.map(r =>
+      `<span><span class="badge ${roleColors[r.id] || 'badge-blue'}">${r.name}</span> &nbsp;${r.description}</span>`
+    ).join('');
+  }
+
+  // User create modal: populate role select (exclude admin role 0)
+  const sel = document.getElementById('u-role');
+  if (sel && appRoles.length) {
+    sel.innerHTML = appRoles
+      .filter(r => r.id !== 0)
+      .map(r => `<option value="${r.id}">${r.name} — ${r.description}</option>`)
+      .join('');
+  }
+
+  // Role-based UI
+  setupRoleUI(currentUser.role);
+}
+
+function setupRoleUI(role) {
+  applyRoles();
+}
+
+function applyRoles() {
+  const role = currentUser.role;
+  document.querySelectorAll('[data-admin-only]').forEach(el => {
+    el.style.display = role === 0 ? '' : 'none';
+  });
+  document.querySelectorAll('[data-backup-role]').forEach(el => {
+    el.style.display = role === 1 ? 'none' : '';
+  });
+  document.querySelectorAll('[data-no-readonly]').forEach(el => {
+    el.style.display = role === 1 ? 'none' : '';
+  });
+}
+
+function copyUserKey() {
+  if (!currentUser.user_key) return;
+  navigator.clipboard.writeText(currentUser.user_key).then(() => toast('Clave copiada al portapapeles', 'success'));
+}
+
+// â”€â”€â”€ Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const READONLY_ALLOWED = ['dashboard', 'connections', 'backups', 'schedules'];
+
+function showSection(name, el) {
+  if (currentUser.role === 1 && !READONLY_ALLOWED.includes(name)) return;
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'dashboard') refreshAll();
+  if (name === 'backups') { loadBackups(); populateConnFilter(); }
+  if (name === 'schedules') loadSchedules();
+  if (name === 'logs') loadLogs();
+  if (name === 'restore') populateRestoreSelects();
+  if (name === 'connections') loadConnections();
+  if (name === 'users') loadUsers();
+}
+
+// â”€â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast-msg ${type}`;
+  el.innerHTML = `<span>${msg}</span>`;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// â”€â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// â”€â”€â”€ Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function toggleOpt(id) { document.getElementById(id).classList.toggle('on'); }
+function isOn(id) { return document.getElementById(id).classList.contains('on'); }
+
+// â”€â”€â”€ Format helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function fmtSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(2) + ' MB';
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('es', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function dbBadge(type) {
+  const map = { mysql:'badge-blue', postgresql:'badge-purple', sqlite:'badge-amber' };
+  return `<span class="badge ${map[type]||'badge-gray'}">${type}</span>`;
+}
+
+// â”€â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function loadStats() {
+  const r = await fetch('/api/stats');
+  const d = await r.json();
+  document.getElementById('stat-total').textContent = d.total_backups;
+  document.getElementById('stat-enc').textContent = d.encrypted;
+  document.getElementById('stat-size').textContent = fmtSize(d.total_size_bytes);
+  document.getElementById('stat-conns').textContent = d.connections;
+  document.getElementById('stat-sched').textContent = d.active_schedules;
+  document.getElementById('stat-fail').textContent = d.failed;
+}
+
+async function refreshAll() {
+  await Promise.all([loadStats(), loadRecentBackups(), loadSystemStats(), initApp()]);
+}
+
+// â”€â”€â”€ Dashboard Backups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function loadRecentBackups() {
+  const r = await fetch('/api/backups');
+  backups = await r.json();
+  const recent = backups.slice(0, 8);
+  const el = document.getElementById('dash-backups-table');
+  if (!recent.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-title">Sin backups</div></div>`;
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>Base de datos</th><th>Conexion</th><th>Tamano</th><th>Tipo</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
+    <tbody>${recent.map(b => `
+      <tr>
+        <td class="mono">${b.db_name||'—'}</td>
+        <td>${b.connection_name}</td>
+        <td class="mono">${fmtSize(b.size_bytes)}</td>
+        <td>${b.encrypted?'<span class="tag tag-enc">AES</span>':''} ${b.compressed?'<span class="tag tag-zip">gz</span>':''} ${b.backup_type==='scheduled'?'<span class="tag tag-auto">auto</span>':''}</td>
+        <td>${b.status==='completed'?'<span class="badge badge-green">OK</span>':'<span class="badge badge-red">Error</span>'}</td>
+        <td class="mono" style="font-size:11px;">${fmtDate(b.created_at)}</td>
+        <td data-backup-role><button class="btn btn-outline btn-sm" onclick="openDownloadModal(${b.id},'${b.filename}',${!!b.encrypted},${!!b.compressed})">DL</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+  applyRoles();
+}
+
+async function loadSystemStats() {
+  const r = await apiFetch('/api/system');
+  if (!r) return;
+  const d = await r.json();
+  if (d.error) return;
+  const circ = 276.46;
+
+  const cpuPct = d.cpu_percent || 0;
+  document.getElementById('cpu-pct').textContent = cpuPct.toFixed(0) + '%';
+  document.getElementById('cpu-arc').style.strokeDashoffset = circ * (1 - cpuPct / 100);
+  document.getElementById('cpu-cores').textContent = (d.cpu_count || '—') + ' núcleos';
+  document.getElementById('cpu-freq').textContent = d.cpu_freq ? (d.cpu_freq / 1000).toFixed(2) + ' GHz' : '—';
+
+  const memPct = d.memory_percent || 0;
+  document.getElementById('mem-pct').textContent = memPct.toFixed(0) + '%';
+  document.getElementById('mem-arc').style.strokeDashoffset = circ * (1 - memPct / 100);
+  document.getElementById('mem-used').textContent = fmtSize(d.memory_used);
+  document.getElementById('mem-total').textContent = '/ ' + fmtSize(d.memory_total);
+
+  const diskPct = d.disk_percent || 0;
+  document.getElementById('disk-bar').style.width = diskPct + '%';
+  document.getElementById('disk-used-label').textContent = fmtSize(d.disk_used) + ' usado';
+  document.getElementById('disk-total-label').textContent = fmtSize(d.disk_total) + ' total';
+  document.getElementById('disk-pct-label').textContent = diskPct.toFixed(1) + '%';
+  document.getElementById('disk-free-label').textContent = fmtSize(d.disk_free);
+  document.getElementById('disk-path').textContent = d.disk_path || '';
+}
+
+// â”€â”€â”€ Connections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function loadConnections() {
+  const r = await apiFetch('/api/connections');
+  if (!r) return;
+  connections = await r.json();
+  const el = document.getElementById('conn-table');
+  if (!connections.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-title">Sin conexiones</div><div class="empty-sub">Agrega tu primera conexion SQL</div></div>`;
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>Nombre</th><th>Tipo</th><th>Host</th><th>Base de datos</th><th>Usuario</th><th>Acciones</th></tr></thead>
+    <tbody>${connections.map(c => `
+      <tr>
+        <td><b>${c.name}</b></td>
+        <td>${dbBadge(c.db_type)}</td>
+        <td class="mono">${c.host||'local'}:${c.port||''}</td>
+        <td class="mono">${c.database}</td>
+        <td class="mono">${c.username||'—'}</td>
+        <td style="display:flex;gap:5px;">
+          <button class="btn btn-outline btn-sm" data-backup-role onclick="quickBackup(${c.id},'${c.name}')">Backup</button>
+          <button class="btn btn-outline btn-sm" data-admin-only onclick="editConn(${c.id})">Editar</button>
+          <button class="btn btn-danger btn-sm" data-admin-only onclick="deleteConn(${c.id})">Eliminar</button>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+  applyRoles();
+}
+
+let editingConnId = null;
+
+function openConnModal() {
+  editingConnId = null;
+  document.getElementById('conn-modal-title').textContent = 'Nueva Conexion SQL';
+  document.getElementById('conn-test-result').style.display = 'none';
+  document.getElementById('c-pass-hint').style.display = 'none';
+  ['c-name','c-host','c-db','c-user','c-pass'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('c-port').value = '3306';
+  document.getElementById('c-type').value = 'mysql';
+  toggleConnFields();
+  openModal('conn-modal');
+}
+
+function editConn(id) {
+  const c = connections.find(x => x.id === id);
+  if (!c) return;
+  editingConnId = id;
+  document.getElementById('conn-modal-title').textContent = 'Editar Conexion SQL';
+  document.getElementById('conn-test-result').style.display = 'none';
+  document.getElementById('c-pass-hint').style.display = '';
+  document.getElementById('c-name').value  = c.name || '';
+  document.getElementById('c-type').value  = c.db_type || 'mysql';
+  document.getElementById('c-host').value  = c.host || '';
+  document.getElementById('c-port').value  = c.port || 3306;
+  document.getElementById('c-db').value    = c.database || '';
+  document.getElementById('c-user').value  = c.username || '';
+  document.getElementById('c-pass').value  = '';
+  toggleConnFields();
+  openModal('conn-modal');
+}
+
+function toggleConnFields() {
+  const type = document.getElementById('c-type').value;
+  const isSqlite = type === 'sqlite';
+  ['f-host','f-port','f-user','f-pass'].forEach(id => {
+    document.getElementById(id).style.display = isSqlite ? 'none' : '';
+  });
+  if (type === 'postgresql') document.getElementById('c-port').value = '5432';
+  else if (type === 'mysql') document.getElementById('c-port').value = '3306';
+}
+
+async function testConnection() {
+  const el = document.getElementById('conn-test-result');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="alert alert-info">Probando conexion...</div>';
+  const d = getConnData();
+  const r = await fetch('/api/connections/test', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d) });
+  const j = await r.json();
+  el.innerHTML = j.success
+    ? `<div class="alert alert-success">Conexion exitosa</div>`
+    : `<div class="alert alert-error">${j.message}</div>`;
+}
+
+function getConnData() {
+  return {
+    name: document.getElementById('c-name').value,
+    db_type: document.getElementById('c-type').value,
+    host: document.getElementById('c-host').value,
+    port: parseInt(document.getElementById('c-port').value) || 3306,
+    database: document.getElementById('c-db').value,
+    username: document.getElementById('c-user').value,
+    password: document.getElementById('c-pass').value,
+  };
+}
+
+async function saveConnection() {
+  const d = getConnData();
+  if (!d.name || !d.database) { toast('Completa los campos requeridos', 'error'); return; }
+  let r;
+  if (editingConnId) {
+    r = await fetch(`/api/connections/${editingConnId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d) });
+  } else {
+    r = await fetch('/api/connections', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d) });
+  }
+  const j = await r.json();
+  if (!r.ok) { toast(j.error || 'Error al guardar', 'error'); return; }
+  toast(editingConnId ? 'Conexion actualizada' : 'Conexion guardada', 'success');
+  closeModal('conn-modal');
+  loadConnections();
+  populateConnFilter();
+}
+
+async function deleteConn(id) {
+  if (!confirm('Eliminar esta conexion?')) return;
+  await fetch(`/api/connections/${id}`, { method:'DELETE' });
+  toast('Conexion eliminada', 'info');
+  loadConnections();
+}
+
+// â”€â”€â”€ Backups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function loadBackups() {
+  const filter = document.getElementById('backup-filter-conn')?.value || '';
+  const url = filter ? `/api/backups?connection_id=${filter}` : '/api/backups';
+  const r = await fetch(url);
+  backups = await r.json();
+  const el = document.getElementById('backups-table');
+  if (!backups.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-title">Sin backups</div></div>`;
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>Archivo</th><th>Conexion</th><th>BD</th><th>Tamano</th><th>Tipo</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+    <tbody>${backups.map(b => `
+      <tr>
+        <td class="mono" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.filename}</td>
+        <td>${b.connection_name}</td>
+        <td class="mono">${b.db_name||'—'}</td>
+        <td class="mono">${fmtSize(b.size_bytes)}</td>
+        <td><div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center;">
+          ${b.encrypted?'<span class="tag tag-enc">AES</span>':''}
+          ${b.compressed?'<span class="tag tag-zip">gz</span>':''}
+          ${b.backup_type==='scheduled'?'<span class="tag tag-auto">auto</span>':''}
+        </div></td>
+        <td>${b.status==='completed'?'<span class="badge badge-green">OK</span>':'<span class="badge badge-red">Error</span>'}</td>
+        <td class="mono" style="font-size:11px;">${fmtDate(b.created_at)}</td>
+        <td>
+          <div style="display:flex;gap:3px;">
+            <button class="btn btn-outline btn-sm" title="Descargar" data-backup-role onclick="openDownloadModal(${b.id},'${b.filename}',${!!b.encrypted},${!!b.compressed})">DL</button>
+            <button class="btn btn-outline btn-sm" title="Verificar" onclick="verifyBackup(${b.id})">Ver</button>
+            <button class="btn btn-danger btn-sm" title="Eliminar" data-backup-role onclick="deleteBackup(${b.id})">Del</button>
+          </div>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+  applyRoles();
+}
+
+async function populateConnFilter() {
+  const r = await fetch('/api/connections');
+  connections = await r.json();
+  const sel = document.getElementById('backup-filter-conn');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todas las conexiones</option>' +
+      connections.map(c => `<option value="${c.id}" ${c.id==cur?'selected':''}>${c.name}</option>`).join('');
+  }
+}
+
+function openBackupModal() {
+  fetch('/api/connections').then(r=>r.json()).then(conns => {
+    connections = conns;
+    const sel = document.getElementById('b-conn');
+    sel.innerHTML = '<option value="">Selecciona...</option>' +
+      conns.map(c => `<option value="${c.id}">${c.name} (${c.database})</option>`).join('');
+    document.getElementById('backup-result').style.display = 'none';
+    document.getElementById('b-user-key').value = '';
+    openModal('backup-modal');
+    setTimeout(() => document.getElementById('b-user-key').focus(), 120);
+  });
+}
+
+function quickBackup(id, name) {
+  fetch('/api/connections').then(r=>r.json()).then(conns => {
+    connections = conns;
+    const sel = document.getElementById('b-conn');
+    sel.innerHTML = '<option value="">Selecciona...</option>' +
+      conns.map(c => `<option value="${c.id}" ${c.id===id?'selected':''}>${c.name} (${c.database})</option>`).join('');
+    document.getElementById('backup-result').style.display = 'none';
+    document.getElementById('b-user-key').value = '';
+    openModal('backup-modal');
+    setTimeout(() => document.getElementById('b-user-key').focus(), 120);
+  });
+}
+
+async function doBackup() {
+  const connId  = document.getElementById('b-conn').value;
+  const userKey = document.getElementById('b-user-key').value.trim();
+  if (!connId)  { toast('Selecciona una conexion', 'error'); return; }
+  if (!userKey) { toast('Ingresa tu clave personal', 'error'); return; }
+  const btn = document.getElementById('backup-submit-btn');
+  btn.innerHTML = '<span class="spinner"></span> Generando...';
+  btn.disabled = true;
+  const res = document.getElementById('backup-result');
+  res.style.display = 'none';
+  try {
+    const r = await apiFetch('/api/backups', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        connection_id: parseInt(connId),
+        encrypt:  isOn('t-encrypt'),
+        compress: isOn('t-compress'),
+        user_key: userKey
+      })
+    });
+    if (!r) return;
+    const j = await r.json();
+    if (j.success) {
+      res.style.display = 'block';
+      res.innerHTML = `<div class="alert alert-success">Backup creado: <span class="mono">${j.data.filename}</span> (${fmtSize(j.data.size)})</div>`;
+      toast('Backup creado con exito', 'success');
+      loadRecentBackups(); loadStats();
+    } else {
+      res.style.display = 'block';
+      res.innerHTML = `<div class="alert alert-error">${j.error}</div>`;
+      toast('Error al crear backup', 'error');
+    }
+  } catch(e) {
+    res.style.display = 'block';
+    res.innerHTML = `<div class="alert alert-error">Error de red: ${e.message}</div>`;
+  }
+  btn.innerHTML = 'Crear Backup';
+  btn.disabled = false;
+}
+
+async function deleteBackup(id) {
+  if (!confirm('Eliminar este backup permanentemente?')) return;
+  await fetch(`/api/backups/${id}`, { method:'DELETE' });
+  toast('Backup eliminado', 'info');
+  loadBackups(); loadStats();
+}
+
+let pendingVerifyId = null;
+
+function verifyBackup(id) {
+  pendingVerifyId = id;
+  document.getElementById('verify-body').innerHTML = '';
+  document.getElementById('verify-key-input').value = '';
+  document.getElementById('verify-key-row').style.display = '';
+  document.getElementById('verify-submit-btn').style.display = '';
+  openModal('verify-modal');
+  setTimeout(() => document.getElementById('verify-key-input').focus(), 120);
+}
+
+async function submitVerify() {
+  const pwd  = document.getElementById('verify-key-input').value.trim();
+  const body = document.getElementById('verify-body');
+  const btn  = document.getElementById('verify-submit-btn');
+  btn.disabled = true;
+  body.innerHTML = '<div class="alert alert-info">Verificando integridad...</div>';
+  const r = await fetch(`/api/backups/${pendingVerifyId}/verify`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ user_key: pwd })
+  });
+  const j = await r.json();
+  btn.disabled = false;
+  if (!j.success) {
+    body.innerHTML = `<div class="alert alert-error">${j.message || 'Error al verificar el backup'}</div>`;
+    return;
+  }
+  document.getElementById('verify-key-row').style.display = 'none';
+  btn.style.display = 'none';
+
+  const checksumBadge = j.checksum_match
+    ? `<span class="badge badge-green">Checksum coincide</span>`
+    : `<span class="badge badge-amber">Checksum no coincide — archivo modificado</span>`;
+
+  let decryptHtml = '';
+  if (j.decrypt_ok === true) {
+    decryptHtml = `<div style="margin-top:8px;"><span class="badge badge-green">Descifrado exitoso</span></div>`;
+  } else if (j.decrypt_ok === false) {
+    decryptHtml = `<div style="margin-top:8px;"><span class="badge badge-amber">No se pudo descifrar: ${j.decrypt_msg}</span></div>`;
+  }
+
+  body.innerHTML = `
+    <div class="alert alert-${j.checksum_match ? 'success' : 'amber'}" style="margin-bottom:10px;">
+      ${j.checksum_match ? 'Archivo íntegro — sin modificaciones' : 'Advertencia: el archivo fue modificado'}
+    </div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <label>SHA-256 Checksum</label>
+      <input readonly value="${j.checksum}" class="mono" style="font-size:10px;">
+    </div>
+    ${checksumBadge}
+    ${decryptHtml}`;
+}
+
+// â”€â”€â”€ Schedules â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function loadSchedules() {
+  const r = await fetch('/api/schedules');
+  const schedules = await r.json();
+  const el = document.getElementById('schedules-table');
+  if (!schedules.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-title">Sin schedules</div><div class="empty-sub">Programa backups automaticos cifrados</div></div>`;
+    return;
+  }
+  const freqMap = { hourly:'Cada hora', daily:'Diario', weekly:'Semanal', once:'Una vez' };
+  const freqColor = { hourly:'badge-blue', daily:'badge-blue', weekly:'badge-blue', once:'badge-purple' };
+  el.innerHTML = `<table>
+    <thead><tr><th>Conexion</th><th>Frecuencia</th><th>Hora</th><th>Cifrar</th><th>Comprimir</th><th>Retencion</th><th>Ultimo</th><th>Proximo</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>${schedules.map(s => `
+      <tr>
+        <td>${s.conn_name||'—'}</td>
+        <td><span class="badge ${freqColor[s.frequency]||'badge-blue'}">${freqMap[s.frequency]||s.frequency}</span></td>
+        <td class="mono" style="font-size:11px;">${s.frequency === 'hourly' ? '—' : (s.run_time || '00:00')}</td>
+        <td>${s.encrypt?'<span class="badge badge-purple">Si</span>':'No'}</td>
+        <td>${s.compress?'<span class="badge badge-amber">Si</span>':'No'}</td>
+        <td class="mono">${s.retain_days}d</td>
+        <td class="mono" style="font-size:11px;">${fmtDate(s.last_run)}</td>
+        <td class="mono" style="font-size:11px;">${fmtDate(s.next_run)}</td>
+        <td>${s.active ? '<span class="badge badge-green">Activo</span>' : (s.frequency === 'once' && s.last_run ? '<span class="badge badge-gray">Ejecutado</span>' : '<span class="badge badge-gray">Pausado</span>')}</td>
+        <td>
+          <div style="display:flex;gap:4px;">
+            ${s.frequency !== 'once' ? `<button class="btn btn-outline btn-sm" data-backup-role onclick="toggleSchedule(${s.id})">${s.active?'Pausar':'Activar'}</button>` : ''}
+            <button class="btn btn-danger btn-sm" data-backup-role onclick="deleteSchedule(${s.id})">Eliminar</button>
+          </div>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+  applyRoles();
+}
+
+function onFreqChange() {
+  const freq = document.getElementById('s-freq').value;
+  const timeRow = document.getElementById('s-time-row');
+  const dateRow = document.getElementById('s-date-row');
+  const timeLabel = document.getElementById('s-time-label');
+  if (freq === 'hourly') {
+    timeLabel.textContent = 'Minuto de ejecucion (HH:MM)';
+    timeRow.style.display = '';
+    dateRow.style.display = 'none';
+  } else if (freq === 'once') {
+    timeLabel.textContent = 'Hora';
+    timeRow.style.display = '';
+    dateRow.style.display = '';
+  } else {
+    timeLabel.textContent = 'Hora de ejecucion';
+    timeRow.style.display = '';
+    dateRow.style.display = 'none';
+  }
+}
+
+function openScheduleModal() {
+  fetch('/api/connections').then(r=>r.json()).then(conns => {
+    const sel = document.getElementById('s-conn');
+    sel.innerHTML = '<option value="">Selecciona...</option>' +
+      conns.map(c => `<option value="${c.id}">${c.name} (${c.database})</option>`).join('');
+    document.getElementById('s-freq').value = 'daily';
+    document.getElementById('s-time').value = '00:00';
+    document.getElementById('s-date').value = '';
+    onFreqChange();
+    openModal('schedule-modal');
+  });
+}
+
+async function saveSchedule() {
+  const connId = document.getElementById('s-conn').value;
+  const freq   = document.getElementById('s-freq').value;
+  const time   = document.getElementById('s-time').value || '00:00';
+  const date   = document.getElementById('s-date').value;
+  if (!connId) { toast('Selecciona una conexion', 'error'); return; }
+  if (freq === 'once' && !date) { toast('Selecciona una fecha', 'error'); return; }
+  await fetch('/api/schedules', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      connection_id: parseInt(connId),
+      frequency:    freq,
+      run_time:     time,
+      run_date:     date || null,
+      encrypt:      isOn('ts-enc') ? 1 : 0,
+      compress:     isOn('ts-comp') ? 1 : 0,
+      retain_days:  parseInt(document.getElementById('s-retain').value) || 30
+    })
+  });
+  toast('Schedule creado', 'success');
+  closeModal('schedule-modal');
+  loadSchedules();
+}
+
+async function toggleSchedule(id) {
+  await fetch(`/api/schedules/${id}`, { method:'PUT' });
+  loadSchedules();
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('Eliminar este schedule?')) return;
+  await fetch(`/api/schedules/${id}`, { method:'DELETE' });
+  loadSchedules();
+}
+
+// â”€â”€â”€ Restore â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function populateRestoreSelects() {
+  const [cr, br] = await Promise.all([fetch('/api/connections'), fetch('/api/backups')]);
+  const [conns, bkps] = await Promise.all([cr.json(), br.json()]);
+  const completed = bkps.filter(b => b.status === 'completed');
+
+  document.getElementById('restore-backup-id').innerHTML =
+    '<option value="">Selecciona un backup...</option>' +
+    completed.map(b => `<option value="${b.id}">[${fmtDate(b.created_at)}] ${b.connection_name} — ${b.db_name} (${fmtSize(b.size_bytes)})</option>`).join('');
+
+  document.getElementById('restore-conn-id').innerHTML =
+    '<option value="">Selecciona conexion destino...</option>' +
+    conns.map(c => `<option value="${c.id}">${c.name} (${c.database})</option>`).join('');
+}
+
+async function doRestore() {
+  const bid     = document.getElementById('restore-backup-id').value;
+  const cid     = document.getElementById('restore-conn-id').value;
+  const userKey = document.getElementById('restore-user-key').value.trim();
+  if (!bid || !cid) { toast('Selecciona backup y conexion destino', 'error'); return; }
+  if (!userKey)     { toast('Ingresa tu clave personal para autorizar', 'error'); return; }
+  if (!confirm('Confirmas la restauracion? Esto sobreescribira los datos existentes.')) return;
+  toast('Restaurando...', 'info');
+  const r = await apiFetch('/api/backups/restore', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ backup_id: parseInt(bid), target_connection_id: parseInt(cid), user_key: userKey })
+  });
+  if (!r) return;
+  const j = await r.json();
+  if (j.success) toast('Restauracion completada', 'success');
+  else toast('Error: ' + j.message, 'error');
+}
+
+// â”€â”€â”€ Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let allLogs = [];
+let currentLogFilter = 'all';
+let currentLevelFilter = 'all';
+let logDateFrom = null;
+let logDateTo = null;
+
+const logMatchers = {
+  login:      msg => /logged in/i.test(msg),
+  logout:     msg => /logged out/i.test(msg),
+  backup:     msg => /backup/i.test(msg),
+  connection: msg => /connection|conexion/i.test(msg),
+  restore:    msg => /restore|restaura/i.test(msg),
+};
+
+const levelColors = { info: 'active-info', warn: 'active-warn', error: 'active-error', notice: 'active-notice' };
+
+async function loadLogs() {
+  const r = await apiFetch('/api/logs');
+  if (!r) return;
+  if (r.status === 403) {
+    document.getElementById('logs-container').innerHTML =
+      `<div class="empty"><div class="empty-title">Acceso denegado</div><div class="empty-sub">No tienes permisos para ver los logs</div></div>`;
+    return;
+  }
+  allLogs = await r.json();
+  renderLogs();
+}
+
+function filterLogs(category, btn) {
+  currentLogFilter = category;
+  document.querySelectorAll('.filter-chip:not(.level-chip)').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderLogs();
+}
+
+function filterByLevel(level, btn) {
+  currentLevelFilter = level;
+  document.querySelectorAll('.level-chip').forEach(c => {
+    c.classList.remove('active', 'active-info', 'active-warn', 'active-error', 'active-notice');
+  });
+  btn.classList.add(level === 'all' ? 'active' : (levelColors[level] || 'active'));
+  renderLogs();
+}
+
+function applyDateFilter() {
+  const from = document.getElementById('log-date-from').value;
+  const to   = document.getElementById('log-date-to').value;
+  logDateFrom = from ? new Date(from + 'T00:00:00') : null;
+  logDateTo   = to   ? new Date(to   + 'T23:59:59') : null;
+  renderLogs();
+}
+
+function clearDateFilter() {
+  document.getElementById('log-date-from').value = '';
+  document.getElementById('log-date-to').value   = '';
+  logDateFrom = null;
+  logDateTo   = null;
+  renderLogs();
+}
+
+function renderLogs() {
+  const el = document.getElementById('logs-container');
+  let filtered = currentLogFilter === 'all'
+    ? allLogs
+    : allLogs.filter(l => logMatchers[currentLogFilter]?.(l.message));
+
+  if (currentLevelFilter !== 'all')
+    filtered = filtered.filter(l => l.level.toLowerCase() === currentLevelFilter);
+
+  if (logDateFrom || logDateTo) {
+    filtered = filtered.filter(l => {
+      const d = new Date(l.created_at);
+      if (logDateFrom && d < logDateFrom) return false;
+      if (logDateTo   && d > logDateTo)   return false;
+      return true;
+    });
+  }
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-title">Sin resultados</div><div class="empty-sub">No hay registros con este filtro</div></div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(l => `
+    <div class="log-entry">
+      <span class="log-time">${fmtDate(l.created_at)}</span>
+      <span class="log-level-${l.level.toLowerCase()}">[${l.level.toUpperCase()}]</span>
+      ${l.username ? `<span style="color:var(--text3);font-size:12px;flex-shrink:0;">${l.username}</span>` : ''}
+      <span class="log-msg">${l.message}</span>
+    </div>`).join('');
+}
+
+// â”€â”€â”€ Download Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function openDownloadModal(id, filename, encrypted, compressed) {
+  pendingDownload = { id, filename, encrypted, compressed };
+  document.getElementById('dl-backup-info').textContent = filename;
+  document.getElementById('dl-user-key').value = '';
+  document.querySelectorAll('input[name="dl-format"]')[0].checked = true;
+  const decryptLabel = document.getElementById('dl-radio-decrypt').closest('label');
+  decryptLabel.style.opacity = encrypted ? '1' : '0.4';
+  decryptLabel.style.pointerEvents = encrypted ? '' : 'none';
+  openModal('download-modal');
+  setTimeout(() => document.getElementById('dl-user-key').focus(), 120);
+}
+
+async function doDownload() {
+  const userKey     = document.getElementById('dl-user-key').value.trim();
+  const wantDecrypt = document.getElementById('dl-radio-decrypt').checked;
+  if (!userKey) { toast('Ingresa tu clave personal', 'error'); return; }
+
+  const btn = document.getElementById('dl-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Descargando...';
+
+  try {
+    const r = await apiFetch(`/api/backups/${pendingDownload.id}/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_key: userKey, decrypt: wantDecrypt })
+    });
+    if (!r) return;
+    if (!r.ok) {
+      const err = await r.json();
+      toast(err.error || 'Error al descargar', 'error');
+      return;
+    }
+    // Extract filename from Content-Disposition or use pending
+    const disposition = r.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const fname = match ? match[1] : pendingDownload.filename;
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = fname; a.click();
+    URL.revokeObjectURL(url);
+    closeModal('download-modal');
+    toast('Descarga iniciada', 'success');
+  } catch (e) {
+    toast('Error de red: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Descargar';
+  }
+}
+
+// â”€â”€â”€ User Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function loadUsers() {
+  const r = await apiFetch('/api/users');
+  if (!r) return;
+  const users = await r.json();
+  const el = document.getElementById('users-table');
+  if (!users.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-title">Sin usuarios</div></div>`;
+    return;
+  }
+  const roleBadge = u => `<span class="badge badge-role-${u.role}">${u.role_name}</span>`;
+  el.innerHTML = `<table>
+    <thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Clave Personal</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
+    <tbody>${users.map(u => `
+      <tr>
+        <td class="mono">#${u.id}</td>
+        <td><b>${u.username}</b></td>
+        <td>${roleBadge(u)}</td>
+        <td class="mono" style="font-size:11px;max-width:180px;white-space:nowrap;">
+          ${u.user_key
+            ? `<span style="letter-spacing:2px;">••••••••</span>`
+            : '<span style="color:var(--text3)">Sin clave</span>'}
+        </td>
+        <td>${u.active ? '<span class="badge badge-green">Activo</span>' : '<span class="badge badge-gray">Inactivo</span>'}</td>
+        <td class="mono" style="font-size:11px;">${fmtDate(u.created_at)}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="openKeyModal(${u.id},'${u.username}')">Cambiar Clave</button>
+          ${u.role !== 0 ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.username}')">Eliminar</button>` : '<span style="color:var(--text3);font-size:11px;line-height:28px;">—</span>'}
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// â”€â”€â”€ User Key Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function toggleKeyDisplay(uid) {
+  const el = document.getElementById(`key-display-${uid}`);
+  const btn = el.nextElementSibling;
+  if (btn.textContent === 'Ver') {
+    el.textContent = el.dataset.key;
+    el.style.letterSpacing = 'normal';
+    btn.textContent = 'Ocultar';
+  } else {
+    el.textContent = '••••••••';
+    el.style.letterSpacing = '2px';
+    btn.textContent = 'Ver';
+  }
+}
+
+let pendingKeyUid = null;
+
+function openKeyModal(uid, username) {
+  pendingKeyUid = uid;
+  document.getElementById('key-modal-username').textContent = username;
+  document.getElementById('key-modal-value').value = '';
+  document.getElementById('key-modal-result').style.display = 'none';
+  openModal('key-modal');
+  setTimeout(() => document.getElementById('key-modal-value').focus(), 120);
+}
+
+function setKeyModal(val) {
+  document.getElementById('key-modal-value').value = val;
+}
+
+async function saveUserKey() {
+  const key = document.getElementById('key-modal-value').value.trim();
+  const res = document.getElementById('key-modal-result');
+  const r = await apiFetch(`/api/users/${pendingKeyUid}/key`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ key })
+  });
+  if (!r) return;
+  const j = await r.json();
+  res.style.display = 'block';
+  if (j.success) {
+    res.innerHTML = `<div class="alert alert-success">
+      Clave actualizada:<br>
+      <span class="mono" style="font-size:11px;word-break:break-all;">${j.user_key}</span>
+    </div>`;
+    loadUsers();
+  } else {
+    res.innerHTML = `<div class="alert alert-error">${j.error}</div>`;
+  }
+}
+
+function openUserModal() {
+  ['u-username','u-password'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('u-role').value = '1';
+  document.getElementById('user-modal-result').style.display = 'none';
+  openModal('user-modal');
+  setTimeout(() => document.getElementById('u-username').focus(), 120);
+}
+
+async function saveUser() {
+  const username = document.getElementById('u-username').value.trim();
+  const password = document.getElementById('u-password').value;
+  const role     = parseInt(document.getElementById('u-role').value);
+  if (!username || !password) { toast('Completa todos los campos', 'error'); return; }
+  const res = document.getElementById('user-modal-result');
+  const r = await apiFetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, role })
+  });
+  if (!r) return;
+  const j = await r.json();
+  if (j.success) {
+    res.style.display = 'block';
+    res.innerHTML = `<div class="alert alert-success">
+      Usuario creado. Clave personal generada:<br>
+      <span class="mono" style="font-size:11px;word-break:break-all;">${j.user_key}</span>
+      <div style="margin-top:6px;font-size:11px;color:var(--text2);">Comparte esta clave con el usuario — la necesitará para descargar y restaurar backups.</div>
+    </div>`;
+    loadUsers();
+  } else {
+    res.style.display = 'block';
+    res.innerHTML = `<div class="alert alert-error">${j.error}</div>`;
+  }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Eliminar al usuario "${username}"?`)) return;
+  const r = await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
+  if (!r) return;
+  toast(`Usuario "${username}" eliminado`, 'info');
+  loadUsers();
+}
+
+// â”€â”€â”€ Page Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+(async function() {
+  await initApp();
+  refreshAll();
+})();
+
+// â”€â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+refreshAll();
+loadConnections();
+</script>
+</body>
+</html>
+
