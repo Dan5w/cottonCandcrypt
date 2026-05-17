@@ -117,7 +117,7 @@ LOG_DIR.mkdir(exist_ok=True)
 MYSQL_HOST = "localhost"
 MYSQL_PORT = 3306
 MYSQL_USER = "root"
-MYSQL_PASS = "LilyPass0??"
+MYSQL_PASS = ""
 MYSQL_DB   = "backups0"
 
 # Path to mysqldump (MySQL 9.2 on Windows)
