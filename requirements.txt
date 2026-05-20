@@ -5,3 +5,4 @@ schedule>=1.2.0
 PyMySQL>=1.1.0
 psycopg2-binary>=2.9.0
 psutil>=5.9.0
+python-dotenv>=1.0.0

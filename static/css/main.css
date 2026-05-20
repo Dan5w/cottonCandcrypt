@@ -129,7 +129,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); disp
   margin-bottom: 24px;
 }
 .stat-card {
-  background: var(--surface);
+  background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--r2);
   padding: 16px 18px;
@@ -162,6 +162,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); disp
   justify-content: space-between;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
+  background: var(--surface2);
 }
 .card-title { font-size: 13px; font-weight: 500; color: var(--text2); }
 
@@ -178,7 +179,7 @@ th {
   text-transform: uppercase;
   letter-spacing: 0.6px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface2);
 }
 td {
   padding: 11px 14px;
@@ -481,6 +482,43 @@ select option { background: var(--bg3); }
   width: 0%;
 }
 
+/* ─── Segmented storage bar (iPhone-style) ──────────────── */
+.storage-segmented-track {
+  height: 10px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 8px 0 5px;
+  display: flex;
+}
+.storage-segment {
+  height: 100%;
+  transition: width 0.7s ease;
+  width: 0%;
+  min-width: 0;
+}
+#seg-backups { background: var(--accent); }
+#seg-logs { background: var(--amber); }
+#seg-other { background: var(--purple); }
+.storage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.storage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.storage-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 /* ─── Sidebar user info ──────────────────────────────────── */
 .sidebar-user {
   padding: 10px 14px;
@@ -610,3 +648,112 @@ select option { background: var(--bg3); }
 }
 .log-date-clear:hover { background: var(--surface2); color: var(--red); border-color: var(--red); }
 .log-level-notice { color: var(--green); }
+
+
+/* ─── Stats line chart legend ────────────────────────────── */
+.stats-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.stats-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text2);
+}
+.stats-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+
+.stat-failed-val { color: var(--red) !important; }
+
+/* ─── Restore layout ─────────────────────────────────────── */
+.restore-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .restore-layout { grid-template-columns: 1fr; }
+}
+
+/* ─── Connection stats grid ──────────────────────────────── */
+.conn-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 768px) {
+  .conn-stats-grid { grid-template-columns: 1fr; }
+}
+
+/* ─── Settings button ────────────────────────────────────── */
+.btn-settings {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-settings:hover {
+  background: var(--surface2);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.btn-settings svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ─── Responsive mobile ──────────────────────────────────── */
+@media (max-width: 640px) {
+  .sidebar {
+    width: 150px;
+    min-width: 150px;
+    overflow-y: auto;
+  }
+  .logo { padding: 14px 12px 12px; }
+  .logo-mark { width: 22px; height: 22px; margin-bottom: 7px; }
+  .logo-name { font-size: 13px; }
+  .nav-item { font-size: 12px; padding: 7px 9px; }
+  .sidebar-user { padding: 8px 10px; }
+  .sidebar-bottom { padding: 6px 10px 8px; }
+  .sidebar-bottom span { display: none; }
+  .btn-logout-mobile { display: flex !important; }
+  .storage-breakdown-grid { grid-template-columns: 1fr; }
+  .charts-grid { grid-template-columns: 1fr; }
+  .stats-legend { gap: 10px; }
+}
+.btn-logout-mobile {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text3);
+  cursor: pointer;
+  padding: 5px 10px;
+  font-size: 13px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.btn-logout-mobile:hover { color: var(--red); border-color: var(--red); }

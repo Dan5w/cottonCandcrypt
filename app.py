@@ -17,11 +17,15 @@ from flask_cors import CORS
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
 import pymysql
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent / ".env")
 
 app = Flask(__name__)
 CORS(app)
-app.secret_key = "dbvault-secret-key-2024-change-in-production"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dbvault-secret-key-2024-change-in-production")
 
 
 def hash_password(password: str) -> str:
@@ -114,15 +118,14 @@ LOG_DIR.mkdir(exist_ok=True)
 
 # ─── MySQL Catalog Config ─────────────────────────────────────────────────────
 
-MYSQL_HOST = "localhost"
-MYSQL_PORT = 3306
-MYSQL_USER = "root"
-MYSQL_PASS = ""
-MYSQL_DB   = "backups0"
+MYSQL_HOST = os.environ.get("MYSQL_HOST", "localhost")
+MYSQL_PORT = int(os.environ.get("MYSQL_PORT", "3306"))
+MYSQL_USER = os.environ.get("MYSQL_USER", "root")
+MYSQL_PASS = os.environ.get("MYSQL_PASS", "")
+MYSQL_DB   = os.environ.get("MYSQL_DB", "backups0")
 
-# Path to mysqldump (MySQL 9.2 on Windows)
-MYSQLDUMP_PATH = r"C:\Program Files\MySQL\MySQL Server 9.2\bin\mysqldump.exe"
-MYSQL_PATH     = r"C:\Program Files\MySQL\MySQL Server 9.2\bin\mysql.exe"
+MYSQLDUMP_PATH = os.environ.get("MYSQLDUMP_PATH", r"C:\Program Files\MySQL\MySQL Server 9.2\bin\mysqldump.exe")
+MYSQL_PATH     = os.environ.get("MYSQL_PATH", r"C:\Program Files\MySQL\MySQL Server 9.2\bin\mysql.exe")
 
 def get_catalog_conn():
     return pymysql.connect(
@@ -150,18 +153,44 @@ def generate_key(password: str, salt: bytes = None):
     key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
     return key, salt
 
-def encrypt_file(data: bytes, password: str) -> bytes:
-    key, salt = generate_key(password)
-    f = Fernet(key)
-    encrypted = f.encrypt(data)
-    return salt + encrypted
+def encrypt_file(data: bytes, password: str, cipher_method: str = "fernet") -> bytes:
+    if cipher_method == "aes-256-gcm":
+        salt = os.urandom(16)
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480000)
+        raw_key = kdf.derive(password.encode())
+        nonce = os.urandom(12)
+        ciphertext = AESGCM(raw_key).encrypt(nonce, data, None)
+        return salt + nonce + ciphertext
+    elif cipher_method == "chacha20":
+        salt = os.urandom(16)
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480000)
+        raw_key = kdf.derive(password.encode())
+        nonce = os.urandom(12)
+        ciphertext = ChaCha20Poly1305(raw_key).encrypt(nonce, data, None)
+        return salt + nonce + ciphertext
+    else:
+        key, salt = generate_key(password)
+        f = Fernet(key)
+        encrypted = f.encrypt(data)
+        return salt + encrypted
 
-def decrypt_file(data: bytes, password: str) -> bytes:
-    salt = data[:16]
-    encrypted = data[16:]
-    key, _ = generate_key(password, salt)
-    f = Fernet(key)
-    return f.decrypt(encrypted)
+def decrypt_file(data: bytes, password: str, cipher_method: str = "fernet") -> bytes:
+    if cipher_method == "aes-256-gcm":
+        salt, nonce, ciphertext = data[:16], data[16:28], data[28:]
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480000)
+        raw_key = kdf.derive(password.encode())
+        return AESGCM(raw_key).decrypt(nonce, ciphertext, None)
+    elif cipher_method == "chacha20":
+        salt, nonce, ciphertext = data[:16], data[16:28], data[28:]
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480000)
+        raw_key = kdf.derive(password.encode())
+        return ChaCha20Poly1305(raw_key).decrypt(nonce, ciphertext, None)
+    else:
+        salt = data[:16]
+        encrypted = data[16:]
+        key, _ = generate_key(password, salt)
+        f = Fernet(key)
+        return f.decrypt(encrypted)
 
 # ─── Catalog Schema Init ──────────────────────────────────────────────────────
 
@@ -234,11 +263,28 @@ def init_catalog():
         except Exception:
             pass
         c.execute("""
+            CREATE TABLE IF NOT EXISTS restores (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                backup_id INT,
+                target_conn_id INT,
+                target_conn_name VARCHAR(255),
+                db_name VARCHAR(255),
+                status VARCHAR(50) DEFAULT 'completed',
+                error_msg TEXT,
+                user_id INT,
+                created_at DATETIME DEFAULT NOW(),
+                FOREIGN KEY(backup_id) REFERENCES backups(id) ON DELETE SET NULL,
+                FOREIGN KEY(target_conn_id) REFERENCES connections(id) ON DELETE SET NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS logs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 level VARCHAR(20),
                 message TEXT,
                 user_id INT,
+                ip_address VARCHAR(45),
                 created_at DATETIME DEFAULT NOW(),
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
             )
@@ -247,6 +293,7 @@ def init_catalog():
             "ALTER TABLE logs ADD COLUMN user_id INT",
             "ALTER TABLE logs DROP COLUMN username",
             "ALTER TABLE logs ADD CONSTRAINT fk_logs_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL",
+            "ALTER TABLE logs ADD COLUMN ip_address VARCHAR(45)",
         ]:
             try:
                 c.execute(migration_sql)
@@ -288,6 +335,8 @@ def init_catalog():
             "ALTER TABLE users MODIFY COLUMN user_key VARCHAR(256) NOT NULL DEFAULT ''",
             "ALTER TABLE users ADD CONSTRAINT fk_users_role FOREIGN KEY(role) REFERENCES roles(id)",
             "ALTER TABLE backups DROP COLUMN connection_name",
+            "ALTER TABLE backups ADD COLUMN cipher_method VARCHAR(30) DEFAULT 'fernet'",
+            "ALTER TABLE backups ADD COLUMN custom_key_used TINYINT DEFAULT 0",
             "ALTER TABLE schedules ADD CONSTRAINT fk_schedules_conn FOREIGN KEY(connection_id) REFERENCES connections(id) ON DELETE CASCADE",
         ]:
             try:
@@ -359,16 +408,18 @@ def get_roles_full() -> list:
 def log_event(level: str, message: str, user_id=None):
     try:
         uid = user_id
-        if uid is None:
-            try:
+        ip_address = None
+        try:
+            if uid is None:
                 uid = session.get("user_id")
-            except RuntimeError:
-                pass  # No active request context (background thread)
+            ip_address = request.remote_addr
+        except RuntimeError:
+            pass  # No active request context (background thread)
         conn = get_catalog_conn()
         with conn.cursor() as c:
             c.execute(
-                "INSERT INTO logs (level, message, user_id) VALUES (%s, %s, %s)",
-                (level, message, uid)
+                "INSERT INTO logs (level, message, user_id, ip_address) VALUES (%s, %s, %s, %s)",
+                (level, message, uid, ip_address)
             )
         conn.commit()
         conn.close()
@@ -398,7 +449,7 @@ def test_connection(db_type, host, port, database, username, password):
 
 # ─── Backup Engine ────────────────────────────────────────────────────────────
 
-def do_backup(conn_id, encrypt=True, compress=True, password="dbvault2024", backup_type="manual"):
+def do_backup(conn_id, encrypt=True, compress=True, password="dbvault2024", backup_type="manual", cipher_method="fernet", custom_key_used=False):
     conn = get_catalog_conn()
     with conn.cursor() as c:
         c.execute("SELECT * FROM connections WHERE id=%s", (conn_id,))
@@ -451,7 +502,7 @@ def do_backup(conn_id, encrypt=True, compress=True, password="dbvault2024", back
         if compress:
             sql_data = gzip.compress(sql_data)
         if encrypt:
-            sql_data = encrypt_file(sql_data, password)
+            sql_data = encrypt_file(sql_data, password, cipher_method)
 
         with open(filepath, "wb") as f:
             f.write(sql_data)
@@ -463,10 +514,12 @@ def do_backup(conn_id, encrypt=True, compress=True, password="dbvault2024", back
         with db.cursor() as c:
             c.execute("""
                 INSERT INTO backups (connection_id, db_name, filename, filepath,
-                    size_bytes, compressed, encrypted, checksum, status, backup_type)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    size_bytes, compressed, encrypted, checksum, status, backup_type,
+                    cipher_method, custom_key_used)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (conn_id, database, filename, str(filepath),
-                  size, int(compress), int(encrypt), checksum, "completed", backup_type))
+                  size, int(compress), int(encrypt), checksum, "completed", backup_type,
+                  cipher_method if encrypt else None, int(custom_key_used)))
         db.commit()
         db.close()
 
@@ -504,6 +557,7 @@ def do_restore(backup_id, target_conn_id, password="dbvault2024"):
     filepath  = Path(bk["filepath"])
     encrypted = bk["encrypted"]
     compressed = bk["compressed"]
+    cipher    = bk.get("cipher_method") or "fernet"
     name      = conn_row["name"]
     db_type   = conn_row["db_type"]
     host      = conn_row["host"]
@@ -517,7 +571,7 @@ def do_restore(backup_id, target_conn_id, password="dbvault2024"):
             data = f.read()
 
         if encrypted:
-            data = decrypt_file(data, password)
+            data = decrypt_file(data, password, cipher)
         if compressed:
             data = gzip.decompress(data)
 
@@ -550,11 +604,32 @@ def do_restore(backup_id, target_conn_id, password="dbvault2024"):
             conn.close()
 
         log_event("INFO", f"Restore completed: backup {backup_id} → {name}")
+        _record_restore(backup_id, target_conn_id, name, database, "completed")
         return True, "Restore completed successfully"
 
     except Exception as e:
         log_event("ERROR", f"Restore failed: {str(e)}")
+        _record_restore(backup_id, target_conn_id, name, database, "failed", str(e))
         return False, str(e)
+
+def _record_restore(backup_id, target_conn_id, conn_name, db_name, status, error_msg=None):
+    try:
+        uid = None
+        try:
+            uid = session.get("user_id")
+        except RuntimeError:
+            pass
+        db = get_catalog_conn()
+        with db.cursor() as c:
+            c.execute(
+                "INSERT INTO restores (backup_id, target_conn_id, target_conn_name, db_name, status, error_msg, user_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (backup_id, target_conn_id, conn_name, db_name, status, error_msg, uid)
+            )
+        db.commit()
+        db.close()
+    except Exception as e:
+        print(f"Record restore error: {e}")
 
 # ─── Scheduler ────────────────────────────────────────────────────────────────
 
@@ -632,6 +707,58 @@ def start_scheduler():
     scheduler_running = True
     scheduler_thread = threading.Thread(target=run_scheduled_backups, daemon=True)
     scheduler_thread.start()
+
+
+# ─── Encrypted Log Writer ────────────────────────────────────────────────────
+
+LOG_ENCRYPT_INTERVAL = 300  # seconds between encrypted log snapshots
+
+def _get_log_encrypt_key():
+    try:
+        db = get_catalog_conn()
+        with db.cursor() as c:
+            c.execute("SELECT user_key FROM users WHERE role=0 AND active=1 LIMIT 1")
+            row = c.fetchone()
+        db.close()
+        if row and row["user_key"]:
+            return decrypt_db_key(row["user_key"])
+    except Exception:
+        pass
+    return "dbvault-log-key-default"
+
+
+def run_log_writer():
+    while scheduler_running:
+        try:
+            db = get_catalog_conn()
+            with db.cursor() as c:
+                c.execute("""
+                    SELECT l.id, l.level, l.message, l.created_at, l.ip_address, u.username
+                    FROM logs l LEFT JOIN users u ON l.user_id = u.id
+                    ORDER BY l.created_at DESC LIMIT 500
+                """)
+                rows = c.fetchall()
+            db.close()
+            if rows:
+                import json as _json
+                plain = _json.dumps([{
+                    "id": r["id"], "level": r["level"], "message": r["message"],
+                    "created_at": str(r["created_at"]),
+                    "username": r.get("username"), "ip_address": r.get("ip_address")
+                } for r in rows], ensure_ascii=False, indent=2).encode("utf-8")
+                key = _get_log_encrypt_key()
+                encrypted = encrypt_file(plain, key)
+                log_file = LOG_DIR / "activity_log.enc"
+                log_file.write_bytes(encrypted)
+        except Exception as e:
+            print(f"Log writer error: {e}")
+        time.sleep(LOG_ENCRYPT_INTERVAL)
+
+
+def start_log_writer():
+    t = threading.Thread(target=run_log_writer, daemon=True)
+    t.start()
+
 
 # ─── API Routes ───────────────────────────────────────────────────────────────
 
@@ -923,7 +1050,10 @@ def get_backups():
             "size_bytes": r["size_bytes"], "compressed": r["compressed"],
             "encrypted": r["encrypted"], "checksum": r["checksum"],
             "status": r["status"], "error_msg": r["error_msg"],
-            "backup_type": r["backup_type"], "created_at": str(r["created_at"])
+            "backup_type": r["backup_type"],
+            "cipher_method": r.get("cipher_method") or "fernet",
+            "custom_key_used": bool(r.get("custom_key_used")),
+            "created_at": str(r["created_at"])
         })
     return jsonify(result)
 
@@ -933,7 +1063,7 @@ def create_backup():
     d = request.json or {}
     user_key = d.get("user_key", "")
     if not user_key:
-        return jsonify({"success": False, "error": "Se requiere tu clave personal para crear y cifrar el backup"}), 403
+        return jsonify({"success": False, "error": "Se requiere tu clave personal para autorizar el backup"}), 403
     if not verify_user_key(user_key):
         log_event("WARN", f"Usuario '{session['user']}' ingresó clave personal incorrecta al crear backup")
         return jsonify({"success": False, "error": "Clave personal incorrecta"}), 403
@@ -942,8 +1072,13 @@ def create_backup():
         return jsonify({"success": False, "error": "Selecciona una conexión"}), 400
     encrypt  = d.get("encrypt", True)
     compress = d.get("compress", True)
-    # The user's personal key IS the encryption password
-    ok, result = do_backup(conn_id, encrypt, compress, user_key)
+    cipher_method = d.get("cipher_method", "fernet")
+    if cipher_method not in ("fernet", "aes-256-gcm", "chacha20"):
+        return jsonify({"success": False, "error": "Método de cifrado no válido"}), 400
+    custom_key = d.get("custom_key", "").strip()
+    enc_password = custom_key if custom_key else user_key
+    ok, result = do_backup(conn_id, encrypt, compress, enc_password, "manual",
+                           cipher_method, custom_key_used=bool(custom_key))
     if ok:
         return jsonify({"success": True, "data": result})
     return jsonify({"success": False, "error": result}), 500
@@ -957,7 +1092,10 @@ def delete_backup(bid):
         row = c.fetchone()
     if row:
         try:
-            os.remove(row["filepath"])
+            fp = Path(row["filepath"])
+            if not fp.exists():
+                fp = BACKUP_DIR / fp.name
+            os.remove(fp)
         except:
             pass
         with db.cursor() as c:
@@ -977,15 +1115,19 @@ def download_backup(bid):
         log_event("WARN", f"Usuario '{session['user']}' ingresó clave personal incorrecta al descargar backup (ID: {bid})")
         return jsonify({"error": "Clave personal incorrecta"}), 403
 
+    dec_key = d.get("custom_key", "").strip() or user_key
+
     db = get_catalog_conn()
     with db.cursor() as c:
-        c.execute("SELECT filepath, filename, encrypted, compressed FROM backups WHERE id=%s", (bid,))
+        c.execute("SELECT filepath, filename, encrypted, compressed, cipher_method FROM backups WHERE id=%s", (bid,))
         row = c.fetchone()
     db.close()
     if not row:
         return jsonify({"error": "Backup no encontrado"}), 404
 
     filepath = Path(row["filepath"])
+    if not filepath.exists():
+        filepath = BACKUP_DIR / filepath.name
     with open(filepath, "rb") as f:
         data = f.read()
 
@@ -994,10 +1136,10 @@ def download_backup(bid):
         return send_file(io.BytesIO(data), as_attachment=True,
                          download_name=row["filename"], mimetype="application/octet-stream")
 
-    # Decrypt using user_key as the encryption password
+    cipher = row.get("cipher_method") or "fernet"
     try:
         if row["encrypted"]:
-            data = decrypt_file(data, user_key)
+            data = decrypt_file(data, dec_key, cipher)
         if row["compressed"]:
             data = gzip.decompress(data)
     except Exception as e:
@@ -1019,6 +1161,7 @@ def download_backup(bid):
 def restore_backup():
     d = request.json or {}
     user_key       = d.get("user_key", "")
+    custom_key     = d.get("custom_key", "").strip()
     backup_id      = d.get("backup_id")
     target_conn_id = d.get("target_connection_id")
 
@@ -1026,15 +1169,43 @@ def restore_backup():
         log_event("WARN", f"Usuario '{session['user']}' ingresó clave personal incorrecta al restaurar backup (ID: {backup_id})")
         return jsonify({"success": False, "message": "Clave personal incorrecta"}), 403
 
-    # user_key is also the decryption password
-    ok, msg = do_restore(backup_id, target_conn_id, user_key)
+    dec_password = custom_key if custom_key else user_key
+    ok, msg = do_restore(backup_id, target_conn_id, dec_password)
     return jsonify({"success": ok, "message": msg})
+
+@app.route("/api/restores")
+@login_required
+def get_restores():
+    db = get_catalog_conn()
+    with db.cursor() as c:
+        c.execute(
+            "SELECT r.id, r.backup_id, r.target_conn_name, r.db_name, r.status, "
+            "r.error_msg, r.created_at, u.username "
+            "FROM restores r LEFT JOIN users u ON r.user_id=u.id "
+            "ORDER BY r.created_at DESC LIMIT 20"
+        )
+        rows = c.fetchall()
+    db.close()
+    result = []
+    for r in rows:
+        result.append({
+            "id": r["id"],
+            "backup_id": r["backup_id"],
+            "target_conn_name": r["target_conn_name"],
+            "db_name": r["db_name"],
+            "status": r["status"],
+            "error_msg": r["error_msg"],
+            "created_at": r["created_at"].strftime("%d %b %Y, %H:%M") if r["created_at"] else "",
+            "username": r["username"] or "—"
+        })
+    return jsonify(result)
 
 @app.route("/api/backups/<int:bid>/verify", methods=["POST"])
 @login_required
 def verify_backup(bid):
     d = request.json or {}
-    password = d.get("user_key", d.get("password", ""))
+    user_key = d.get("user_key", d.get("password", ""))
+    custom_key = d.get("custom_key", "").strip()
     db = get_catalog_conn()
     with db.cursor() as c:
         c.execute("SELECT * FROM backups WHERE id=%s", (bid,))
@@ -1053,9 +1224,11 @@ def verify_backup(bid):
     decrypt_ok     = None
     decrypt_msg    = None
 
-    if row["encrypted"] and password:
+    cipher = row.get("cipher_method") or "fernet"
+    dec_password = custom_key if custom_key else user_key
+    if row["encrypted"] and dec_password:
         try:
-            decrypt_file(data, password)
+            decrypt_file(data, dec_password, cipher)
             decrypt_ok = True
         except InvalidToken:
             decrypt_ok  = False
@@ -1071,6 +1244,8 @@ def verify_backup(bid):
         "checksum_match": checksum_match,
         "decrypt_ok":    decrypt_ok,
         "decrypt_msg":   decrypt_msg,
+        "custom_key_used": bool(row.get("custom_key_used")),
+        "cipher_method": cipher,
     })
 
 # Schedules
@@ -1121,6 +1296,37 @@ def calc_next_run(freq, run_time, run_date=None):
     if freq == "weekly":
         nxt = now.replace(hour=h, minute=m, second=0, microsecond=0)
         nxt += timedelta(days=7)
+        return nxt
+
+    if freq == "monthly":
+        day = 1
+        if run_date:
+            try:
+                day = int(run_date)
+            except (ValueError, TypeError):
+                day = 1
+        day = max(1, min(day, 28))
+        nxt = now.replace(day=day, hour=h, minute=m, second=0, microsecond=0)
+        if nxt <= now:
+            month = now.month + 1
+            year = now.year
+            if month > 12:
+                month = 1
+                year += 1
+            nxt = nxt.replace(year=year, month=month)
+        return nxt
+
+    if freq == "yearly":
+        if run_date:
+            try:
+                target = datetime.strptime(f"{run_date} {h:02d}:{m:02d}", "%m-%d %H:%M")
+                nxt = now.replace(month=target.month, day=target.day, hour=h, minute=m, second=0, microsecond=0)
+            except Exception:
+                nxt = now.replace(month=1, day=1, hour=h, minute=m, second=0, microsecond=0)
+        else:
+            nxt = now.replace(month=1, day=1, hour=h, minute=m, second=0, microsecond=0)
+        if nxt <= now:
+            nxt = nxt.replace(year=now.year + 1)
         return nxt
 
     # daily (default)
@@ -1202,6 +1408,52 @@ def get_stats():
         "active_schedules": schedules_active
     })
 
+@app.route("/api/conn_stats")
+@login_required
+def get_conn_stats():
+    import time
+    db = get_catalog_conn()
+    with db.cursor() as c:
+        t0 = time.time()
+        c.execute("SELECT 1")
+        conn_time_ms = round((time.time() - t0) * 1000, 2)
+
+        c.execute("SELECT COUNT(*) as n FROM connections")
+        user_connections = c.fetchone()["n"]
+
+        c.execute(
+            "SELECT COUNT(*) as n FROM logs "
+            "WHERE message LIKE '%%logged in%%' AND created_at >= NOW() - INTERVAL 60 MINUTE"
+        )
+        logins_hour = c.fetchone()["n"]
+
+        c.execute(
+            "SELECT COUNT(*) as n FROM logs "
+            "WHERE message LIKE '%%logged out%%' AND created_at >= NOW() - INTERVAL 60 MINUTE"
+        )
+        logouts_hour = c.fetchone()["n"]
+
+        c.execute(
+            "SELECT COUNT(*) as n FROM backups "
+            "WHERE status='completed' AND created_at >= NOW() - INTERVAL 60 MINUTE"
+        )
+        backups_hour = c.fetchone()["n"]
+
+        c.execute(
+            "SELECT COUNT(*) as n FROM backups "
+            "WHERE status='failed' AND created_at >= NOW() - INTERVAL 60 MINUTE"
+        )
+        failed_hour = c.fetchone()["n"]
+    db.close()
+    return jsonify({
+        "conn_time_ms": conn_time_ms,
+        "user_connections": user_connections,
+        "logins_hour": logins_hour,
+        "logouts_hour": logouts_hour,
+        "backups_hour": backups_hour,
+        "failed_hour": failed_hour
+    })
+
 @app.route("/api/system")
 @login_required
 def get_system_stats():
@@ -1241,7 +1493,7 @@ def get_logs():
     with db.cursor() as c:
         if role == 2:  # Técnico — solo sus propios logs
             c.execute("""
-                SELECT l.id, l.level, l.message, l.created_at, u.username
+                SELECT l.id, l.level, l.message, l.created_at, l.ip_address, u.username
                 FROM logs l
                 LEFT JOIN users u ON l.user_id = u.id
                 WHERE l.user_id=%s
@@ -1249,7 +1501,7 @@ def get_logs():
             """, (session["user_id"],))
         else:  # Administrador — todos los logs
             c.execute("""
-                SELECT l.id, l.level, l.message, l.created_at, u.username
+                SELECT l.id, l.level, l.message, l.created_at, l.ip_address, u.username
                 FROM logs l
                 LEFT JOIN users u ON l.user_id = u.id
                 ORDER BY l.created_at DESC LIMIT 200
@@ -1259,10 +1511,119 @@ def get_logs():
     return jsonify([{
         "id": r["id"], "level": r["level"],
         "message": r["message"], "created_at": str(r["created_at"]),
-        "username": r.get("username")
+        "username": r.get("username"), "ip_address": r.get("ip_address")
     } for r in rows])
+
+@app.route("/api/storage")
+@login_required
+def get_storage():
+    backup_size = sum(f.stat().st_size for f in BACKUP_DIR.iterdir() if f.is_file())
+    log_size = sum(f.stat().st_size for f in LOG_DIR.iterdir() if f.is_file())
+    return jsonify({"backups_bytes": backup_size, "logs_bytes": log_size})
+
+
+@app.route("/api/logs/export", methods=["POST"])
+@login_required
+def export_logs():
+    role = session.get("user_role", 1)
+    if role not in (0, 2):
+        return jsonify({"error": "Acceso denegado"}), 403
+    data = request.get_json(force=True)
+    user_key = data.get("user_key", "").strip()
+    if not user_key:
+        return jsonify({"error": "Clave personal requerida"}), 400
+    db = get_catalog_conn()
+    uid = session["user_id"]
+    with db.cursor() as c:
+        c.execute("SELECT user_key FROM users WHERE id=%s", (uid,))
+        row = c.fetchone()
+    if not row or not row["user_key"]:
+        db.close()
+        return jsonify({"error": "No tienes clave asignada"}), 403
+    stored = decrypt_db_key(row["user_key"])
+    if user_key != stored:
+        db.close()
+        log_event("WARN", "Failed log export — wrong key", uid)
+        return jsonify({"error": "Clave incorrecta"}), 403
+
+    export_format = data.get("format", "plain")
+    date_range    = data.get("range", "all")
+    date_from     = data.get("date_from")
+    date_to       = data.get("date_to")
+
+    where_clauses = []
+    params = []
+    if role == 2:
+        where_clauses.append("l.user_id=%s")
+        params.append(uid)
+    if date_range == "today":
+        where_clauses.append("DATE(l.created_at) = CURDATE()")
+    elif date_range == "range" and date_from and date_to:
+        where_clauses.append("DATE(l.created_at) >= %s")
+        params.append(date_from)
+        where_clauses.append("DATE(l.created_at) <= %s")
+        params.append(date_to)
+
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    with db.cursor() as c:
+        c.execute(f"""
+            SELECT l.id, l.level, l.message, l.created_at, l.ip_address, u.username
+            FROM logs l LEFT JOIN users u ON l.user_id = u.id
+            {where_sql}
+            ORDER BY l.created_at DESC
+        """, params)
+        rows = c.fetchall()
+    db.close()
+
+    lines = []
+    for r in rows:
+        ts = r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r["created_at"] else ""
+        user = r.get("username") or "—"
+        ip = r.get("ip_address") or ""
+        level = (r["level"] or "INFO").upper()
+        msg = r["message"] or ""
+        lines.append(f"{ts}  [{level}]  {user}  {ip}  {msg}")
+
+    plain = "\n".join(lines).encode("utf-8")
+    ts_label = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if export_format == "encrypted":
+        log_event("INFO", f"User '{session['user']}' exported logs (encrypted)", uid)
+        encrypted = encrypt_file(plain, user_key)
+        buf = io.BytesIO(encrypted)
+        buf.seek(0)
+        fname = f"logs_export_{ts_label}.log.enc"
+        return send_file(buf, as_attachment=True, download_name=fname, mimetype="application/octet-stream")
+    else:
+        log_event("INFO", f"User '{session['user']}' exported logs (plain)", uid)
+        buf = io.BytesIO(plain)
+        buf.seek(0)
+        fname = f"logs_export_{ts_label}.log"
+        return send_file(buf, as_attachment=True, download_name=fname, mimetype="text/plain")
+
+
+@app.route("/api/logs/purge", methods=["POST"])
+@login_required
+def purge_logs():
+    role = session.get("user_role", 1)
+    if role != 0:
+        return jsonify({"error": "Solo administradores pueden borrar logs"}), 403
+    data = request.get_json(force=True)
+    days = int(data.get("days", 30))
+    cutoff = datetime.now() - timedelta(days=days)
+    db = get_catalog_conn()
+    with db.cursor() as c:
+        c.execute("DELETE FROM logs WHERE created_at < %s", (cutoff,))
+        deleted = c.rowcount
+    db.commit()
+    db.close()
+    log_event("INFO", f"Admin '{session['user']}' purged {deleted} logs older than {days} days")
+    return jsonify({"success": True, "deleted": deleted})
+
 
 if __name__ == "__main__":
     init_catalog()
     start_scheduler()
-    app.run(debug=True, port=5000, use_reloader=False)
+    start_log_writer()
+    app.run(host="0.0.0.0", port=5000, use_reloader=False)

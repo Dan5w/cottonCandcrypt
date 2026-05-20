@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DBVault — Gestor de Backups SQL</title>
+<title>cottonCandcrypt — Gestor de Backups SQL</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 
@@ -14,24 +14,18 @@
 <aside class="sidebar">
   <div class="logo">
     <div class="logo-mark"></div>
-    <div class="logo-name">DBVault</div>
+    <div class="logo-name">cottonCandcrypt</div>
     <div class="logo-sub">v1.0 · MySQL backups0</div>
   </div>
   <nav class="nav">
     <div class="nav-item active" onclick="showSection('dashboard', this)">
-      <div class="nav-dot"></div> Dashboard
-    </div>
-    <div class="nav-item" id="nav-users" onclick="showSection('users', this)" style="display:none;" data-admin-only>
-      <div class="nav-dot"></div> Usuarios
+      <div class="nav-dot"></div> Menu
     </div>
     <div class="nav-item" onclick="showSection('connections', this)">
       <div class="nav-dot"></div> Conexiones
     </div>
     <div class="nav-item" onclick="showSection('backups', this)">
       <div class="nav-dot"></div> Backups
-    </div>
-    <div class="nav-item" onclick="showSection('schedules', this)">
-      <div class="nav-dot"></div> Schedules
     </div>
     <div class="nav-item" onclick="showSection('restore', this)" data-no-readonly>
       <div class="nav-dot"></div> Restaurar
@@ -57,54 +51,17 @@
   <!-- DASHBOARD -->
   <div id="section-dashboard" class="section active">
     <div class="topbar">
-      <div class="topbar-title">Dashboard</div>
+      <div class="topbar-title">Menu</div>
       <div class="topbar-actions">
         <button class="btn btn-outline" onclick="refreshAll()">Actualizar</button>
-        <button class="btn btn-primary" data-backup-role onclick="openBackupModal()">+ Nuevo Backup</button>
+        <button class="btn btn-outline btn-icon btn-settings" id="nav-users" data-admin-only onclick="showSection('users', this)" title="Usuarios y Ajustes" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button class="btn-logout-mobile" onclick="logout()" title="Cerrar sesion">&#x23FB;</button>
       </div>
     </div>
     <div class="content">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Total Backups</div>
-          <div class="stat-value" id="stat-total">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Cifrados</div>
-          <div class="stat-value" id="stat-enc">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Tamaño Total</div>
-          <div class="stat-value" id="stat-size">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Conexiones</div>
-          <div class="stat-value" id="stat-conns">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Schedules Activos</div>
-          <div class="stat-value" id="stat-sched">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Fallidos</div>
-          <div class="stat-value" id="stat-fail">—</div>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="col">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Ultimos Backups</span>
-            </div>
-            <div class="table-wrap" id="dash-backups-table">
-              <div class="empty"><div class="empty-title">Sin backups</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- CPU + RAM gauges -->
+      <!-- CPU + RAM gauges (top) -->
       <div class="charts-grid">
         <div class="gauge-card">
           <div class="gauge-title">Uso de CPU</div>
@@ -116,13 +73,13 @@
                 style="transition:stroke-dashoffset 0.7s ease;"/>
             </svg>
             <div class="gauge-label">
-              <span class="gauge-pct" id="cpu-pct">—</span>
+              <span class="gauge-pct" id="cpu-pct">--</span>
               <span class="gauge-sub">CPU</span>
             </div>
           </div>
           <div class="gauge-detail">
-            <span id="cpu-cores">— núcleos</span>
-            <span id="cpu-freq">—</span>
+            <span id="cpu-cores">-- nucleos</span>
+            <span id="cpu-freq">--</span>
           </div>
         </div>
 
@@ -136,31 +93,101 @@
                 style="transition:stroke-dashoffset 0.7s ease;"/>
             </svg>
             <div class="gauge-label">
-              <span class="gauge-pct" id="mem-pct">—</span>
+              <span class="gauge-pct" id="mem-pct">--</span>
               <span class="gauge-sub">RAM</span>
             </div>
           </div>
           <div class="gauge-detail">
-            <span id="mem-used">—</span>
-            <span id="mem-total">—</span>
+            <span id="mem-used">--</span>
+            <span id="mem-total">--</span>
           </div>
         </div>
       </div>
 
-      <!-- Disk usage -->
+      <!-- Unified storage card (iPhone-style) -->
       <div class="card" style="margin-bottom:20px;">
         <div class="card-header">
-          <span class="card-title">Espacio en Disco</span>
+          <span class="card-title">Almacenamiento</span>
           <span class="mono" id="disk-path" style="font-size:11px;color:var(--text3);"></span>
         </div>
         <div style="padding:14px 18px;">
-          <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);color:var(--text2);">
-            <span id="disk-used-label">—</span>
-            <span id="disk-total-label" style="color:var(--text3);">—</span>
+          <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);color:var(--text2);margin-bottom:2px;">
+            <span id="disk-used-label">--</span>
+            <span id="disk-total-label" style="color:var(--text3);">--</span>
           </div>
-          <div class="disk-bar-track"><div class="disk-bar-fill" id="disk-bar"></div></div>
-          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);">
-            <span id="disk-pct-label">—</span> utilizado &nbsp;·&nbsp; <span id="disk-free-label">—</span> libre
+          <div class="storage-segmented-track">
+            <div class="storage-segment" id="seg-backups"></div>
+            <div class="storage-segment" id="seg-logs"></div>
+            <div class="storage-segment" id="seg-other"></div>
+          </div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:12px;">
+            <span id="disk-pct-label">--</span> utilizado &nbsp;·&nbsp; <span id="disk-free-label">--</span> libre
+          </div>
+          <div class="storage-legend">
+            <span class="storage-legend-item"><span class="storage-legend-dot" style="background:var(--accent);"></span>Backups <span class="mono" id="storage-backups-label" style="color:var(--text3);font-size:11px;">--</span></span>
+            <span class="storage-legend-item"><span class="storage-legend-dot" style="background:var(--amber);"></span>Logs <span class="mono" id="storage-logs-label" style="color:var(--text3);font-size:11px;">--</span></span>
+            <span class="storage-legend-item"><span class="storage-legend-dot" style="background:var(--purple);"></span>Otros <span class="mono" id="storage-other-label" style="color:var(--text3);font-size:11px;">--</span></span>
+            <span class="storage-legend-item"><span class="storage-legend-dot" style="background:var(--border);"></span>Libre <span class="mono" id="storage-free-label" style="color:var(--text3);font-size:11px;">--</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Statistics -->
+      <div class="conn-stats-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Connection Statistics</span>
+          </div>
+          <div style="padding:18px 18px 6px;">
+            <canvas id="conn-time-chart" height="140"></canvas>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Atributo</th><th>Valor</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Connection Time</td><td class="mono" id="cs-conn-time">-- ms</td></tr>
+                <tr><td>User Connections</td><td class="mono" id="cs-user-conn">--</td></tr>
+                <tr><td>Logins / Hora</td><td class="mono" id="cs-logins">--</td></tr>
+                <tr><td>Logouts / Hora</td><td class="mono" id="cs-logouts">--</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Backup Statistics</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Atributo</th><th>Valor</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Total Backups</td><td class="mono" id="stat-total">--</td></tr>
+                <tr><td>Cifrados (AES)</td><td class="mono" id="stat-encrypted">--</td></tr>
+                <tr><td>Schedules Activos</td><td class="mono" id="stat-schedules">--</td></tr>
+                <tr><td>Fallidos</td><td class="mono" id="stat-failed">--</td></tr>
+                <tr><td>Tamano Total</td><td class="mono" id="stat-size">--</td></tr>
+                <tr><td>Backups / Hora</td><td class="mono" id="stat-backups-hour">--</td></tr>
+                <tr><td>Fallidos / Hora</td><td class="mono" id="stat-failed-hour">--</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Backups -->
+      <div class="row">
+        <div class="col">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Ultimos Backups</span>
+            </div>
+            <div class="table-wrap" id="dash-backups-table">
+              <div class="empty"><div class="empty-title">Sin backups</div></div>
+            </div>
           </div>
         </div>
       </div>
@@ -184,7 +211,7 @@
     </div>
   </div>
 
-  <!-- BACKUPS -->
+  <!-- BACKUPS + SCHEDULES -->
   <div id="section-backups" class="section">
     <div class="topbar">
       <div class="topbar-title">Catalogo de Backups</div>
@@ -193,27 +220,20 @@
           <option value="">Todas las conexiones</option>
         </select>
         <button class="btn btn-primary" data-backup-role onclick="openBackupModal()">+ Nuevo Backup</button>
+        <button class="btn btn-outline" data-backup-role onclick="openScheduleModal()" style="border-color:var(--accent);color:var(--accent);">+ Backup Programado</button>
       </div>
     </div>
     <div class="content">
-      <div class="card">
+      <div class="card" style="margin-bottom:20px;">
         <div class="table-wrap" id="backups-table">
           <div class="empty"><div class="empty-title">Sin backups</div><div class="empty-sub">Crea tu primer backup cifrado</div></div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- SCHEDULES -->
-  <div id="section-schedules" class="section">
-    <div class="topbar">
-      <div class="topbar-title">Backups Automaticos</div>
-      <div class="topbar-actions">
-        <button class="btn btn-primary" data-backup-role onclick="openScheduleModal()">+ Nuevo Schedule</button>
-      </div>
-    </div>
-    <div class="content">
       <div class="card">
+        <div class="card-header">
+          <span class="card-title">Backups Programados</span>
+        </div>
         <div class="table-wrap" id="schedules-table">
           <div class="empty"><div class="empty-title">Sin schedules</div><div class="empty-sub">Programa backups automaticos cifrados</div></div>
         </div>
@@ -227,36 +247,50 @@
       <div class="topbar-title">Restaurar Backup</div>
     </div>
     <div class="content">
-      <div class="card" style="max-width:560px;">
-        <div class="modal-header" style="border:none;padding-bottom:6px;">
-          <span class="modal-title">Configurar Restauracion</span>
-        </div>
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group full">
-              <label>Backup a restaurar</label>
-              <select id="restore-backup-id">
-                <option value="">Selecciona un backup...</option>
-              </select>
+      <div class="restore-layout">
+        <div class="card">
+          <div class="modal-header" style="border:none;padding-bottom:6px;">
+            <span class="modal-title">Configurar Restauracion</span>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group full">
+                <label>Backup a restaurar</label>
+                <select id="restore-backup-id">
+                  <option value="">Selecciona un backup...</option>
+                </select>
+              </div>
+              <div class="form-group full">
+                <label>Conexion destino</label>
+                <select id="restore-conn-id">
+                  <option value="">Selecciona la conexion destino...</option>
+                </select>
+              </div>
+              <div class="form-group full">
+                <label>Tu clave personal <span style="color:var(--text3);font-weight:400;">(autoriza y descifra el backup)</span></label>
+                <input type="password" id="restore-user-key" placeholder="Clave asignada por el administrador">
+              </div>
+              <div class="form-group full" id="restore-custom-key-row" style="display:none;">
+                <label>Clave del backup <span style="color:var(--text3);font-weight:400;">(este backup usa clave personalizada)</span></label>
+                <input type="password" id="restore-custom-key" placeholder="La clave que se uso al crear este backup">
+              </div>
             </div>
-            <div class="form-group full">
-              <label>Conexion destino</label>
-              <select id="restore-conn-id">
-                <option value="">Selecciona la conexion destino...</option>
-              </select>
-            </div>
-            <div class="form-group full">
-              <label>Tu clave personal <span style="color:var(--text3);font-weight:400;">(autoriza y descifra el backup)</span></label>
-              <input type="password" id="restore-user-key" placeholder="Clave asignada por el administrador">
+            <div class="divider"></div>
+            <div class="alert alert-info">
+              Advertencia: La restauracion sobreescribira los datos existentes en la base de datos destino.
             </div>
           </div>
-          <div class="divider"></div>
-          <div class="alert alert-info">
-            Advertencia: La restauracion sobreescribira los datos existentes en la base de datos destino.
+          <div class="modal-footer" style="border:none;padding-top:0;">
+            <button class="btn btn-primary" data-backup-role onclick="doRestore()">Restaurar</button>
           </div>
         </div>
-        <div class="modal-footer" style="border:none;padding-top:0;">
-          <button class="btn btn-primary" data-backup-role onclick="doRestore()">Restaurar</button>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Ultimas Restauraciones</span>
+          </div>
+          <div class="table-wrap" id="restore-history-table">
+            <div class="empty"><div class="empty-title">Sin restauraciones</div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -289,6 +323,8 @@
       <div class="topbar-title">Registro de Actividad</div>
       <div class="topbar-actions">
         <button class="btn btn-outline" onclick="loadLogs()">Actualizar</button>
+        <button class="btn btn-outline" data-backup-role onclick="openLogExportModal()" style="border-color:var(--green);color:var(--green);">Exportar Logs</button>
+        <button class="btn btn-danger" data-admin-only onclick="openLogPurgeModal()" style="display:none;">Programar Borrado</button>
       </div>
     </div>
     <div class="content">
@@ -402,10 +438,24 @@
       <div class="divider"></div>
       <div class="toggle-row">
         <div>
-          <div class="toggle-label">Cifrar backup (AES-256)</div>
-          <div class="toggle-sub">Usando PBKDF2 + Fernet con tu clave personal</div>
+          <div class="toggle-label">Cifrar backup</div>
+          <div class="toggle-sub">Protege los datos con cifrado</div>
         </div>
-        <div class="toggle on" id="t-encrypt" onclick="toggleOpt('t-encrypt')"></div>
+        <div class="toggle on" id="t-encrypt" onclick="toggleOpt('t-encrypt'); toggleCipherOpts()"></div>
+      </div>
+      <div id="cipher-options">
+        <div class="form-group full" style="margin-top:10px;">
+          <label>Metodo de cifrado</label>
+          <select id="b-cipher">
+            <option value="fernet">Fernet (AES-128-CBC + HMAC)</option>
+            <option value="aes-256-gcm">AES-256-GCM</option>
+            <option value="chacha20">ChaCha20-Poly1305</option>
+          </select>
+        </div>
+        <div class="form-group full" style="margin-top:6px;">
+          <label>Clave personalizada <span style="color:var(--text3);font-weight:400;">(opcional — si se deja vacio se usa tu clave personal)</span></label>
+          <input type="password" id="b-custom-key" placeholder="Clave especifica para este backup">
+        </div>
       </div>
       <div class="toggle-row">
         <div>
@@ -443,12 +493,33 @@
             <option value="hourly">Cada hora</option>
             <option value="daily" selected>Diario</option>
             <option value="weekly">Semanal</option>
+            <option value="monthly">Mensual</option>
+            <option value="yearly">Anual</option>
             <option value="once">Una vez (fecha especifica)</option>
           </select>
         </div>
         <div class="form-group" id="s-time-row">
           <label id="s-time-label">Hora de ejecucion</label>
           <input id="s-time" type="time" value="00:00">
+        </div>
+        <div class="form-group" id="s-day-row" style="display:none;">
+          <label id="s-day-label">Dia del mes</label>
+          <select id="s-day">
+            <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+            <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+            <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option>
+            <option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option>
+            <option value="26">26</option><option value="27">27</option><option value="28">28</option>
+          </select>
+        </div>
+        <div class="form-group" id="s-month-row" style="display:none;">
+          <label>Mes</label>
+          <select id="s-month">
+            <option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option><option value="04">Abril</option>
+            <option value="05">Mayo</option><option value="06">Junio</option><option value="07">Julio</option><option value="08">Agosto</option>
+            <option value="09">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
         </div>
         <div class="form-group" id="s-date-row" style="display:none;">
           <label>Fecha</label>
@@ -485,9 +556,14 @@
     </div>
     <div class="modal-body">
       <div id="verify-key-row" class="form-group" style="margin-bottom:12px;">
-        <label>Clave personal <span style="color:var(--text3);font-weight:400;">(solo si el backup está cifrado)</span></label>
-        <input type="password" id="verify-key-input" placeholder="Dejar vacío si no está cifrado" autocomplete="off">
+        <label>Clave personal <span style="color:var(--text3);font-weight:400;">(autoriza la verificacion)</span></label>
+        <input type="password" id="verify-key-input" placeholder="Tu clave personal" autocomplete="off">
       </div>
+      <div id="verify-custom-key-row" class="form-group" style="margin-bottom:12px;display:none;">
+        <label>Clave del backup <span style="color:var(--text3);font-weight:400;">(este backup usa clave personalizada)</span></label>
+        <input type="password" id="verify-custom-key-input" placeholder="La clave que se uso al crear este backup" autocomplete="off">
+      </div>
+      <div id="verify-cipher-info" style="margin-bottom:12px;display:none;"></div>
       <div id="verify-body"></div>
     </div>
     <div class="modal-footer">
@@ -509,6 +585,10 @@
       <div class="form-group" style="margin-bottom:14px;">
         <label>Tu clave personal <span style="color:var(--text3);font-weight:400;">(requerida para autorizar)</span></label>
         <input type="password" id="dl-user-key" placeholder="Tu clave única de usuario">
+      </div>
+      <div id="dl-custom-key-row" class="form-group" style="margin-bottom:14px;display:none;">
+        <label>Clave del backup <span style="color:var(--text3);font-weight:400;">(este backup usa clave personalizada)</span></label>
+        <input type="password" id="dl-custom-key" placeholder="La clave que se uso al crear este backup">
       </div>
       <div class="divider"></div>
       <div style="margin-bottom:12px;">
@@ -599,6 +679,101 @@
   </div>
 </div>
 
+<!-- Log Export Modal -->
+<div class="modal-backdrop" id="log-export-modal">
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <span class="modal-title">Exportar Logs</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('log-export-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Tu clave personal <span style="color:var(--text3);font-weight:400;">(requerida para autorizar)</span></label>
+        <input type="password" id="log-export-key" placeholder="Clave asignada por el administrador">
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Formato de exportacion</div>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;">
+          <input type="radio" name="log-export-format" id="log-fmt-plain" value="plain" checked style="margin-top:3px;width:auto;">
+          <div>
+            <div style="font-size:13px;color:var(--text);">Sin cifrar <span class="badge badge-green" style="margin-left:4px;">.log</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Archivo de texto plano legible</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+          <input type="radio" name="log-export-format" id="log-fmt-enc" value="encrypted" style="margin-top:3px;width:auto;">
+          <div>
+            <div style="font-size:13px;color:var(--text);">Cifrado <span class="badge badge-purple" style="margin-left:4px;">.log.enc</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Cifrado AES-256 con tu clave personal</div>
+          </div>
+        </label>
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Rango de fechas</div>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px;">
+          <input type="radio" name="log-export-range" id="log-range-all" value="all" checked style="margin-top:3px;width:auto;" onchange="toggleLogDateRange()">
+          <div style="font-size:13px;color:var(--text);">Todos los logs</div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px;">
+          <input type="radio" name="log-export-range" id="log-range-today" value="today" style="margin-top:3px;width:auto;" onchange="toggleLogDateRange()">
+          <div style="font-size:13px;color:var(--text);">Solo hoy</div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px;">
+          <input type="radio" name="log-export-range" id="log-range-custom" value="range" style="margin-top:3px;width:auto;" onchange="toggleLogDateRange()">
+          <div style="font-size:13px;color:var(--text);">Rango personalizado</div>
+        </label>
+      </div>
+      <div id="log-export-dates" style="display:none;">
+        <div class="form-grid" style="gap:10px;">
+          <div class="form-group">
+            <label>Desde</label>
+            <input type="date" id="log-export-from">
+          </div>
+          <div class="form-group">
+            <label>Hasta</label>
+            <input type="date" id="log-export-to">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('log-export-modal')">Cancelar</button>
+      <button class="btn btn-primary" id="log-export-btn" onclick="doLogExport()">Exportar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Purge Modal -->
+<div class="modal-backdrop" id="log-purge-modal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">Programar Borrado de Logs</span>
+      <button class="btn btn-outline btn-icon" onclick="closeModal('log-purge-modal')">x</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-error" style="margin-bottom:14px;">
+        Esta accion eliminara permanentemente los logs anteriores al periodo seleccionado.
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Eliminar logs anteriores a</label>
+        <select id="log-purge-days">
+          <option value="7">7 dias</option>
+          <option value="15">15 dias</option>
+          <option value="30" selected>30 dias</option>
+          <option value="60">60 dias</option>
+          <option value="90">90 dias</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('log-purge-modal')">Cancelar</button>
+      <button class="btn btn-danger" onclick="doLogPurge()">Eliminar Logs</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -678,19 +853,18 @@ function copyUserKey() {
 }
 
 // â”€â”€â”€ Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const READONLY_ALLOWED = ['dashboard', 'connections', 'backups', 'schedules'];
+const READONLY_ALLOWED = ['dashboard', 'connections', 'backups'];
 
 function showSection(name, el) {
   if (currentUser.role === 1 && !READONLY_ALLOWED.includes(name)) return;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('section-' + name).classList.add('active');
-  el.classList.add('active');
+  if (el && el.classList) el.classList.add('active');
   if (name === 'dashboard') refreshAll();
-  if (name === 'backups') { loadBackups(); populateConnFilter(); }
-  if (name === 'schedules') loadSchedules();
+  if (name === 'backups') { loadBackups(); loadSchedules(); populateConnFilter(); }
   if (name === 'logs') loadLogs();
-  if (name === 'restore') populateRestoreSelects();
+  if (name === 'restore') { populateRestoreSelects(); loadRestoreHistory(); }
   if (name === 'connections') loadConnections();
   if (name === 'users') loadUsers();
 }
@@ -711,6 +885,9 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 // â”€â”€â”€ Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function toggleOpt(id) { document.getElementById(id).classList.toggle('on'); }
 function isOn(id) { return document.getElementById(id).classList.contains('on'); }
+function toggleCipherOpts() {
+  document.getElementById('cipher-options').style.display = isOn('t-encrypt') ? '' : 'none';
+}
 
 // â”€â”€â”€ Format helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function fmtSize(bytes) {
@@ -729,19 +906,224 @@ function dbBadge(type) {
 }
 
 // â”€â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let statsHistory = [];
+
 async function loadStats() {
   const r = await fetch('/api/stats');
   const d = await r.json();
+  const now = new Date();
+  const label = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  statsHistory.push({
+    label,
+    total: d.total_backups,
+    encrypted: d.encrypted,
+    connections: d.connections,
+    schedules: d.active_schedules,
+    failed: d.failed
+  });
+  if (statsHistory.length > 10) statsHistory.shift();
+  drawStatsChart();
+
   document.getElementById('stat-total').textContent = d.total_backups;
-  document.getElementById('stat-enc').textContent = d.encrypted;
+  document.getElementById('stat-encrypted').textContent = d.encrypted;
+  document.getElementById('stat-schedules').textContent = d.active_schedules;
+  const failedEl = document.getElementById('stat-failed');
+  failedEl.textContent = d.failed;
+  if (d.failed > 0) failedEl.classList.add('stat-failed-val');
+  else failedEl.classList.remove('stat-failed-val');
   document.getElementById('stat-size').textContent = fmtSize(d.total_size_bytes);
-  document.getElementById('stat-conns').textContent = d.connections;
-  document.getElementById('stat-sched').textContent = d.active_schedules;
-  document.getElementById('stat-fail').textContent = d.failed;
+}
+
+function drawStatsChart() {
+  const canvas = document.getElementById('stats-line-chart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.parentElement.offsetWidth - 36;
+  const H = canvas.height = 180;
+  ctx.clearRect(0, 0, W, H);
+
+  const series = [
+    { key:'total', color:'var(--accent)', label:'Total Backups' },
+    { key:'encrypted', color:'var(--purple)', label:'Cifrados' },
+    { key:'connections', color:'var(--green)', label:'Conexiones' },
+    { key:'schedules', color:'var(--amber)', label:'Schedules' },
+    { key:'failed', color:'var(--red)', label:'Fallidos' }
+  ];
+
+  const colors = {
+    'var(--accent)': getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+    'var(--purple)': getComputedStyle(document.documentElement).getPropertyValue('--purple').trim(),
+    'var(--green)': getComputedStyle(document.documentElement).getPropertyValue('--green').trim(),
+    'var(--amber)': getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(),
+    'var(--red)': getComputedStyle(document.documentElement).getPropertyValue('--red').trim()
+  };
+
+  let maxVal = 1;
+  for (const s of series) {
+    for (const p of statsHistory) {
+      if (p[s.key] > maxVal) maxVal = p[s.key];
+    }
+  }
+  maxVal = Math.ceil(maxVal * 1.2) || 1;
+
+  const padL = 36, padR = 16, padT = 16, padB = 28;
+  const gW = W - padL - padR;
+  const gH = H - padT - padB;
+
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (gH / 4) * i;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text3').trim();
+    ctx.font = '10px IBM Plex Mono';
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxVal - (maxVal / 4) * i), padL - 6, y + 4);
+  }
+
+  const n = statsHistory.length;
+  if (n < 1) return;
+
+  for (const s of series) {
+    const c = colors[s.color] || s.color;
+    ctx.strokeStyle = c;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = padL + (n > 1 ? (gW / (n - 1)) * i : gW / 2);
+      const y = padT + gH - (statsHistory[i][s.key] / maxVal) * gH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const x = padL + (n > 1 ? (gW / (n - 1)) * i : gW / 2);
+      const y = padT + gH - (statsHistory[i][s.key] / maxVal) * gH;
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < n; i++) {
+    const x = padL + (n > 1 ? (gW / (n - 1)) * i : gW / 2);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text3').trim();
+    ctx.font = '10px IBM Plex Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(statsHistory[i].label, x, H - 6);
+  }
+
+  const legend = document.getElementById('stats-legend');
+  if (legend) {
+    const last = statsHistory[n - 1];
+    legend.innerHTML = series.map(s =>
+      `<span class="stats-legend-item"><span class="stats-legend-dot" style="background:${colors[s.color]}"></span>${s.label}: <b>${last[s.key]}</b></span>`
+    ).join('');
+  }
+}
+
+// ─── Connection Statistics ────────────────────────────────────
+let connTimeHistory = [];
+
+async function loadConnStats() {
+  const r = await apiFetch('/api/conn_stats');
+  if (!r) return;
+  const d = await r.json();
+  const now = new Date();
+  const label = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  connTimeHistory.push({ label, ms: d.conn_time_ms });
+  if (connTimeHistory.length > 8) connTimeHistory.shift();
+  drawConnTimeChart();
+
+  document.getElementById('cs-conn-time').textContent = d.conn_time_ms + ' ms';
+  document.getElementById('cs-user-conn').textContent = d.user_connections;
+  document.getElementById('cs-logins').textContent = d.logins_hour;
+  document.getElementById('cs-logouts').textContent = d.logouts_hour;
+  document.getElementById('stat-backups-hour').textContent = d.backups_hour;
+  const fhEl = document.getElementById('stat-failed-hour');
+  fhEl.textContent = d.failed_hour;
+  if (d.failed_hour > 0) fhEl.classList.add('stat-failed-val');
+  else fhEl.classList.remove('stat-failed-val');
+}
+
+function drawConnTimeChart() {
+  const canvas = document.getElementById('conn-time-chart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.parentElement.offsetWidth - 36;
+  const H = canvas.height = 140;
+  ctx.clearRect(0, 0, W, H);
+
+  const n = connTimeHistory.length;
+  if (n < 1) return;
+
+  const greenC = getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+  const borderC = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+  const text3C = getComputedStyle(document.documentElement).getPropertyValue('--text3').trim();
+
+  let maxVal = 1;
+  for (const p of connTimeHistory) { if (p.ms > maxVal) maxVal = p.ms; }
+  maxVal = Math.ceil(maxVal * 1.3) || 1;
+
+  const padL = 36, padR = 16, padT = 14, padB = 26;
+  const gW = W - padL - padR, gH = H - padT - padB;
+
+  ctx.strokeStyle = borderC; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (gH / 4) * i;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.fillStyle = text3C; ctx.font = '9px IBM Plex Mono'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxVal - (maxVal / 4) * i), padL - 6, y + 3);
+  }
+
+  ctx.strokeStyle = greenC; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = padL + (n > 1 ? (gW / (n - 1)) * i : gW / 2);
+    const y = padT + gH - (connTimeHistory[i].ms / maxVal) * gH;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  for (let i = 0; i < n; i++) {
+    const x = padL + (n > 1 ? (gW / (n - 1)) * i : gW / 2);
+    const y = padT + gH - (connTimeHistory[i].ms / maxVal) * gH;
+    ctx.fillStyle = greenC;
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  for (let i = 0; i < n; i++) {
+    const x = padL + (n > 1 ? (gW / (n - 1)) * i : gW / 2);
+    ctx.fillStyle = text3C; ctx.font = '9px IBM Plex Mono'; ctx.textAlign = 'center';
+    ctx.fillText(connTimeHistory[i].label, x, H - 4);
+  }
+
+  ctx.fillStyle = text3C; ctx.font = '9px IBM Plex Mono'; ctx.textAlign = 'left';
+  ctx.fillText('Connection Time (ms)', padL, padT - 4);
+}
+
+let _diskTotal = 0, _diskUsed = 0;
+
+async function loadStorage() {
+  const r = await apiFetch('/api/storage');
+  if (!r) return;
+  const d = await r.json();
+  const backups = d.backups_bytes || 0;
+  const logs = d.logs_bytes || 0;
+  document.getElementById('storage-backups-label').textContent = fmtSize(backups);
+  document.getElementById('storage-logs-label').textContent = fmtSize(logs);
+
+  if (_diskTotal > 0) {
+    const other = Math.max(_diskUsed - backups - logs, 0);
+    const free = Math.max(_diskTotal - _diskUsed, 0);
+    document.getElementById('storage-other-label').textContent = fmtSize(other);
+    document.getElementById('storage-free-label').textContent = fmtSize(free);
+    const t = _diskTotal || 1;
+    document.getElementById('seg-backups').style.width = (backups / t * 100) + '%';
+    document.getElementById('seg-logs').style.width = (logs / t * 100) + '%';
+    document.getElementById('seg-other').style.width = (other / t * 100) + '%';
+  }
 }
 
 async function refreshAll() {
-  await Promise.all([loadStats(), loadRecentBackups(), loadSystemStats(), initApp()]);
+  await Promise.all([loadStats(), loadRecentBackups(), loadSystemStats(), loadConnStats(), initApp()]);
+  await loadStorage();
 }
 
 // â”€â”€â”€ Dashboard Backups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -761,10 +1143,10 @@ async function loadRecentBackups() {
         <td class="mono">${b.db_name||'—'}</td>
         <td>${b.connection_name}</td>
         <td class="mono">${fmtSize(b.size_bytes)}</td>
-        <td>${b.encrypted?'<span class="tag tag-enc">AES</span>':''} ${b.compressed?'<span class="tag tag-zip">gz</span>':''} ${b.backup_type==='scheduled'?'<span class="tag tag-auto">auto</span>':''}</td>
+        <td>${b.encrypted?`<span class="tag tag-enc">${(b.cipher_method||'fernet').toUpperCase()}</span>`:''} ${b.compressed?'<span class="tag tag-zip">gz</span>':''} ${b.backup_type==='scheduled'?'<span class="tag tag-auto">auto</span>':''} ${b.custom_key_used?'<span class="tag tag-auto">key</span>':''}</td>
         <td>${b.status==='completed'?'<span class="badge badge-green">OK</span>':'<span class="badge badge-red">Error</span>'}</td>
         <td class="mono" style="font-size:11px;">${fmtDate(b.created_at)}</td>
-        <td data-backup-role><button class="btn btn-outline btn-sm" onclick="openDownloadModal(${b.id},'${b.filename}',${!!b.encrypted},${!!b.compressed})">DL</button></td>
+        <td data-backup-role><button class="btn btn-outline btn-sm" onclick="openDownloadModal(${b.id},'${b.filename}',${!!b.encrypted},${!!b.compressed},${!!b.custom_key_used})">DL</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -791,7 +1173,8 @@ async function loadSystemStats() {
   document.getElementById('mem-total').textContent = '/ ' + fmtSize(d.memory_total);
 
   const diskPct = d.disk_percent || 0;
-  document.getElementById('disk-bar').style.width = diskPct + '%';
+  _diskTotal = d.disk_total || 0;
+  _diskUsed = d.disk_used || 0;
   document.getElementById('disk-used-label').textContent = fmtSize(d.disk_used) + ' usado';
   document.getElementById('disk-total-label').textContent = fmtSize(d.disk_total) + ' total';
   document.getElementById('disk-pct-label').textContent = diskPct.toFixed(1) + '%';
@@ -939,16 +1322,17 @@ async function loadBackups() {
         <td class="mono">${b.db_name||'—'}</td>
         <td class="mono">${fmtSize(b.size_bytes)}</td>
         <td><div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center;">
-          ${b.encrypted?'<span class="tag tag-enc">AES</span>':''}
+          ${b.encrypted?`<span class="tag tag-enc">${(b.cipher_method||'fernet').toUpperCase()}</span>`:''}
           ${b.compressed?'<span class="tag tag-zip">gz</span>':''}
           ${b.backup_type==='scheduled'?'<span class="tag tag-auto">auto</span>':''}
+          ${b.custom_key_used?'<span class="tag tag-auto">key</span>':''}
         </div></td>
         <td>${b.status==='completed'?'<span class="badge badge-green">OK</span>':'<span class="badge badge-red">Error</span>'}</td>
         <td class="mono" style="font-size:11px;">${fmtDate(b.created_at)}</td>
         <td>
           <div style="display:flex;gap:3px;">
-            <button class="btn btn-outline btn-sm" title="Descargar" data-backup-role onclick="openDownloadModal(${b.id},'${b.filename}',${!!b.encrypted},${!!b.compressed})">DL</button>
-            <button class="btn btn-outline btn-sm" title="Verificar" onclick="verifyBackup(${b.id})">Ver</button>
+            <button class="btn btn-outline btn-sm" title="Descargar" data-backup-role onclick="openDownloadModal(${b.id},'${b.filename}',${!!b.encrypted},${!!b.compressed},${!!b.custom_key_used})">DL</button>
+            <button class="btn btn-outline btn-sm" title="Verificar" onclick="verifyBackup(${b.id},${!!b.custom_key_used},'${b.cipher_method||'fernet'}')">Ver</button>
             <button class="btn btn-danger btn-sm" title="Eliminar" data-backup-role onclick="deleteBackup(${b.id})">Del</button>
           </div>
         </td>
@@ -1013,7 +1397,9 @@ async function doBackup() {
         connection_id: parseInt(connId),
         encrypt:  isOn('t-encrypt'),
         compress: isOn('t-compress'),
-        user_key: userKey
+        user_key: userKey,
+        cipher_method: document.getElementById('b-cipher').value,
+        custom_key: document.getElementById('b-custom-key').value
       })
     });
     if (!r) return;
@@ -1045,18 +1431,33 @@ async function deleteBackup(id) {
 
 let pendingVerifyId = null;
 
-function verifyBackup(id) {
+function verifyBackup(id, customKeyUsed, cipherMethod) {
   pendingVerifyId = id;
   document.getElementById('verify-body').innerHTML = '';
   document.getElementById('verify-key-input').value = '';
+  document.getElementById('verify-custom-key-input').value = '';
   document.getElementById('verify-key-row').style.display = '';
   document.getElementById('verify-submit-btn').style.display = '';
+  const customRow = document.getElementById('verify-custom-key-row');
+  const cipherInfo = document.getElementById('verify-cipher-info');
+  if (customKeyUsed) {
+    customRow.style.display = '';
+  } else {
+    customRow.style.display = 'none';
+  }
+  if (cipherMethod && cipherMethod !== 'fernet') {
+    cipherInfo.style.display = '';
+    cipherInfo.innerHTML = `<span class="tag tag-enc">${cipherMethod.toUpperCase()}</span> <span style="font-size:11px;color:var(--text3);">Cifrado con ${cipherMethod.toUpperCase()}</span>`;
+  } else {
+    cipherInfo.style.display = 'none';
+  }
   openModal('verify-modal');
   setTimeout(() => document.getElementById('verify-key-input').focus(), 120);
 }
 
 async function submitVerify() {
-  const pwd  = document.getElementById('verify-key-input').value.trim();
+  const pwd = document.getElementById('verify-key-input').value.trim();
+  const customKey = document.getElementById('verify-custom-key-input').value.trim();
   const body = document.getElementById('verify-body');
   const btn  = document.getElementById('verify-submit-btn');
   btn.disabled = true;
@@ -1064,7 +1465,7 @@ async function submitVerify() {
   const r = await fetch(`/api/backups/${pendingVerifyId}/verify`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ user_key: pwd })
+    body: JSON.stringify({ user_key: pwd, custom_key: customKey })
   });
   const j = await r.json();
   btn.disabled = false;
@@ -1073,17 +1474,20 @@ async function submitVerify() {
     return;
   }
   document.getElementById('verify-key-row').style.display = 'none';
+  document.getElementById('verify-custom-key-row').style.display = 'none';
   btn.style.display = 'none';
 
   const checksumBadge = j.checksum_match
     ? `<span class="badge badge-green">Checksum coincide</span>`
     : `<span class="badge badge-amber">Checksum no coincide — archivo modificado</span>`;
 
+  const cipherLabel = (j.cipher_method || 'fernet').toUpperCase();
+
   let decryptHtml = '';
   if (j.decrypt_ok === true) {
-    decryptHtml = `<div style="margin-top:8px;"><span class="badge badge-green">Descifrado exitoso</span></div>`;
+    decryptHtml = `<div style="margin-top:8px;"><span class="badge badge-green">Descifrado exitoso (${cipherLabel})</span></div>`;
   } else if (j.decrypt_ok === false) {
-    decryptHtml = `<div style="margin-top:8px;"><span class="badge badge-amber">No se pudo descifrar: ${j.decrypt_msg}</span></div>`;
+    decryptHtml = `<div style="margin-top:8px;"><span class="badge badge-amber">No se pudo descifrar (${cipherLabel}): ${j.decrypt_msg}</span></div>`;
   }
 
   body.innerHTML = `
@@ -1107,8 +1511,8 @@ async function loadSchedules() {
     el.innerHTML = `<div class="empty"><div class="empty-title">Sin schedules</div><div class="empty-sub">Programa backups automaticos cifrados</div></div>`;
     return;
   }
-  const freqMap = { hourly:'Cada hora', daily:'Diario', weekly:'Semanal', once:'Una vez' };
-  const freqColor = { hourly:'badge-blue', daily:'badge-blue', weekly:'badge-blue', once:'badge-purple' };
+  const freqMap = { hourly:'Cada hora', daily:'Diario', weekly:'Semanal', monthly:'Mensual', yearly:'Anual', once:'Una vez' };
+  const freqColor = { hourly:'badge-blue', daily:'badge-blue', weekly:'badge-blue', monthly:'badge-green', yearly:'badge-amber', once:'badge-purple' };
   el.innerHTML = `<table>
     <thead><tr><th>Conexion</th><th>Frecuencia</th><th>Hora</th><th>Cifrar</th><th>Comprimir</th><th>Retencion</th><th>Ultimo</th><th>Proximo</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>${schedules.map(s => `
@@ -1138,19 +1542,30 @@ function onFreqChange() {
   const freq = document.getElementById('s-freq').value;
   const timeRow = document.getElementById('s-time-row');
   const dateRow = document.getElementById('s-date-row');
+  const dayRow = document.getElementById('s-day-row');
+  const monthRow = document.getElementById('s-month-row');
   const timeLabel = document.getElementById('s-time-label');
+  const dayLabel = document.getElementById('s-day-label');
+  timeRow.style.display = '';
+  dateRow.style.display = 'none';
+  dayRow.style.display = 'none';
+  monthRow.style.display = 'none';
   if (freq === 'hourly') {
     timeLabel.textContent = 'Minuto de ejecucion (HH:MM)';
-    timeRow.style.display = '';
-    dateRow.style.display = 'none';
   } else if (freq === 'once') {
     timeLabel.textContent = 'Hora';
-    timeRow.style.display = '';
     dateRow.style.display = '';
+  } else if (freq === 'monthly') {
+    timeLabel.textContent = 'Hora de ejecucion';
+    dayRow.style.display = '';
+    dayLabel.textContent = 'Dia del mes';
+  } else if (freq === 'yearly') {
+    timeLabel.textContent = 'Hora de ejecucion';
+    monthRow.style.display = '';
+    dayRow.style.display = '';
+    dayLabel.textContent = 'Dia';
   } else {
     timeLabel.textContent = 'Hora de ejecucion';
-    timeRow.style.display = '';
-    dateRow.style.display = 'none';
   }
 }
 
@@ -1172,8 +1587,13 @@ async function saveSchedule() {
   const freq   = document.getElementById('s-freq').value;
   const time   = document.getElementById('s-time').value || '00:00';
   const date   = document.getElementById('s-date').value;
+  const day    = document.getElementById('s-day').value;
+  const month  = document.getElementById('s-month').value;
   if (!connId) { toast('Selecciona una conexion', 'error'); return; }
   if (freq === 'once' && !date) { toast('Selecciona una fecha', 'error'); return; }
+  let runDate = date || null;
+  if (freq === 'monthly') runDate = day;
+  if (freq === 'yearly') runDate = month + '-' + String(day).padStart(2, '0');
   await fetch('/api/schedules', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -1181,7 +1601,7 @@ async function saveSchedule() {
       connection_id: parseInt(connId),
       frequency:    freq,
       run_time:     time,
-      run_date:     date || null,
+      run_date:     runDate,
       encrypt:      isOn('ts-enc') ? 1 : 0,
       compress:     isOn('ts-comp') ? 1 : 0,
       retain_days:  parseInt(document.getElementById('s-retain').value) || 30
@@ -1204,14 +1624,22 @@ async function deleteSchedule(id) {
 }
 
 // â”€â”€â”€ Restore â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let _restoreBackups = [];
+
 async function populateRestoreSelects() {
   const [cr, br] = await Promise.all([fetch('/api/connections'), fetch('/api/backups')]);
   const [conns, bkps] = await Promise.all([cr.json(), br.json()]);
-  const completed = bkps.filter(b => b.status === 'completed');
+  _restoreBackups = bkps.filter(b => b.status === 'completed');
 
-  document.getElementById('restore-backup-id').innerHTML =
+  const sel = document.getElementById('restore-backup-id');
+  sel.innerHTML =
     '<option value="">Selecciona un backup...</option>' +
-    completed.map(b => `<option value="${b.id}">[${fmtDate(b.created_at)}] ${b.connection_name} — ${b.db_name} (${fmtSize(b.size_bytes)})</option>`).join('');
+    _restoreBackups.map(b => `<option value="${b.id}">[${fmtDate(b.created_at)}] ${b.connection_name} — ${b.db_name} (${fmtSize(b.size_bytes)})</option>`).join('');
+  sel.onchange = function() {
+    const bk = _restoreBackups.find(b => b.id === parseInt(this.value));
+    document.getElementById('restore-custom-key-row').style.display = (bk && bk.custom_key_used) ? '' : 'none';
+    document.getElementById('restore-custom-key').value = '';
+  };
 
   document.getElementById('restore-conn-id').innerHTML =
     '<option value="">Selecciona conexion destino...</option>' +
@@ -1219,22 +1647,49 @@ async function populateRestoreSelects() {
 }
 
 async function doRestore() {
-  const bid     = document.getElementById('restore-backup-id').value;
-  const cid     = document.getElementById('restore-conn-id').value;
-  const userKey = document.getElementById('restore-user-key').value.trim();
+  const bid       = document.getElementById('restore-backup-id').value;
+  const cid       = document.getElementById('restore-conn-id').value;
+  const userKey   = document.getElementById('restore-user-key').value.trim();
+  const customKey = document.getElementById('restore-custom-key').value.trim();
   if (!bid || !cid) { toast('Selecciona backup y conexion destino', 'error'); return; }
   if (!userKey)     { toast('Ingresa tu clave personal para autorizar', 'error'); return; }
+  const bk = _restoreBackups.find(b => b.id === parseInt(bid));
+  if (bk && bk.custom_key_used && !customKey) { toast('Ingresa la clave del backup', 'error'); return; }
   if (!confirm('Confirmas la restauracion? Esto sobreescribira los datos existentes.')) return;
   toast('Restaurando...', 'info');
   const r = await apiFetch('/api/backups/restore', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ backup_id: parseInt(bid), target_connection_id: parseInt(cid), user_key: userKey })
+    body: JSON.stringify({ backup_id: parseInt(bid), target_connection_id: parseInt(cid), user_key: userKey, custom_key: customKey })
   });
   if (!r) return;
   const j = await r.json();
   if (j.success) toast('Restauracion completada', 'success');
   else toast('Error: ' + j.message, 'error');
+  loadRestoreHistory();
+}
+
+async function loadRestoreHistory() {
+  const r = await apiFetch('/api/restores');
+  if (!r) return;
+  const rows = await r.json();
+  const el = document.getElementById('restore-history-table');
+  if (!rows.length) {
+    el.innerHTML = '<div class=”empty”><div class=”empty-title”>Sin restauraciones</div></div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>Base de datos</th><th>Conexion</th><th>Estado</th><th>Usuario</th><th>Fecha</th></tr></thead>
+    <tbody>${rows.map(r => `
+      <tr>
+        <td class=”mono”>${r.db_name || '—'}</td>
+        <td>${r.target_conn_name || '—'}</td>
+        <td>${r.status === 'completed' ? '<span class=”badge badge-green”>OK</span>' : '<span class=”badge badge-red”>Error</span>'}</td>
+        <td>${r.username}</td>
+        <td class=”mono” style=”font-size:11px;”>${r.created_at}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
 }
 
 // â”€â”€â”€ Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1325,15 +1780,18 @@ function renderLogs() {
       <span class="log-time">${fmtDate(l.created_at)}</span>
       <span class="log-level-${l.level.toLowerCase()}">[${l.level.toUpperCase()}]</span>
       ${l.username ? `<span style="color:var(--text3);font-size:12px;flex-shrink:0;">${l.username}</span>` : ''}
+      ${l.ip_address ? `<span style="color:var(--text3);font-size:11px;font-family:var(--mono);flex-shrink:0;">${l.ip_address}</span>` : ''}
       <span class="log-msg">${l.message}</span>
     </div>`).join('');
 }
 
 // â”€â”€â”€ Download Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function openDownloadModal(id, filename, encrypted, compressed) {
-  pendingDownload = { id, filename, encrypted, compressed };
+function openDownloadModal(id, filename, encrypted, compressed, customKeyUsed) {
+  pendingDownload = { id, filename, encrypted, compressed, customKeyUsed };
   document.getElementById('dl-backup-info').textContent = filename;
   document.getElementById('dl-user-key').value = '';
+  document.getElementById('dl-custom-key').value = '';
+  document.getElementById('dl-custom-key-row').style.display = customKeyUsed ? '' : 'none';
   document.querySelectorAll('input[name="dl-format"]')[0].checked = true;
   const decryptLabel = document.getElementById('dl-radio-decrypt').closest('label');
   decryptLabel.style.opacity = encrypted ? '1' : '0.4';
@@ -1344,8 +1802,10 @@ function openDownloadModal(id, filename, encrypted, compressed) {
 
 async function doDownload() {
   const userKey     = document.getElementById('dl-user-key').value.trim();
+  const customKey   = document.getElementById('dl-custom-key').value.trim();
   const wantDecrypt = document.getElementById('dl-radio-decrypt').checked;
   if (!userKey) { toast('Ingresa tu clave personal', 'error'); return; }
+  if (pendingDownload.customKeyUsed && wantDecrypt && !customKey) { toast('Ingresa la clave del backup', 'error'); return; }
 
   const btn = document.getElementById('dl-submit-btn');
   btn.disabled = true;
@@ -1355,7 +1815,7 @@ async function doDownload() {
     const r = await apiFetch(`/api/backups/${pendingDownload.id}/download`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_key: userKey, decrypt: wantDecrypt })
+      body: JSON.stringify({ user_key: userKey, decrypt: wantDecrypt, custom_key: customKey })
     });
     if (!r) return;
     if (!r.ok) {
@@ -1458,10 +1918,7 @@ async function saveUserKey() {
   const j = await r.json();
   res.style.display = 'block';
   if (j.success) {
-    res.innerHTML = `<div class="alert alert-success">
-      Clave actualizada:<br>
-      <span class="mono" style="font-size:11px;word-break:break-all;">${j.user_key}</span>
-    </div>`;
+    res.innerHTML = `<div class="alert alert-success">Clave actualizada correctamente.</div>`;
     loadUsers();
   } else {
     res.innerHTML = `<div class="alert alert-error">${j.error}</div>`;
@@ -1509,6 +1966,92 @@ async function deleteUser(id, username) {
   if (!r) return;
   toast(`Usuario "${username}" eliminado`, 'info');
   loadUsers();
+}
+
+// â”€â”€â”€ Log Export & Purge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function openLogExportModal() {
+  document.getElementById('log-export-key').value = '';
+  document.getElementById('log-export-from').value = '';
+  document.getElementById('log-export-to').value = '';
+  document.getElementById('log-fmt-plain').checked = true;
+  document.getElementById('log-range-all').checked = true;
+  document.getElementById('log-export-dates').style.display = 'none';
+  openModal('log-export-modal');
+  setTimeout(() => document.getElementById('log-export-key').focus(), 120);
+}
+
+function toggleLogDateRange() {
+  const isRange = document.getElementById('log-range-custom').checked;
+  document.getElementById('log-export-dates').style.display = isRange ? '' : 'none';
+}
+
+async function doLogExport() {
+  const key = document.getElementById('log-export-key').value.trim();
+  if (!key) { toast('Ingresa tu clave personal', 'error'); return; }
+  const format = document.getElementById('log-fmt-enc').checked ? 'encrypted' : 'plain';
+  const range  = document.getElementById('log-range-today').checked ? 'today' : document.getElementById('log-range-custom').checked ? 'range' : 'all';
+  const payload = { user_key: key, format, range };
+  if (range === 'range') {
+    payload.date_from = document.getElementById('log-export-from').value;
+    payload.date_to   = document.getElementById('log-export-to').value;
+    if (!payload.date_from || !payload.date_to) { toast('Selecciona ambas fechas', 'error'); return; }
+  }
+  const btn = document.getElementById('log-export-btn');
+  btn.disabled = true; btn.textContent = 'Exportando...';
+  try {
+    const r = await apiFetch('/api/logs/export', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!r) return;
+    if (!r.ok) {
+      const j = await r.json();
+      toast(j.error || 'Error al exportar', 'error');
+      return;
+    }
+    const disposition = r.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename=”?([^”]+)”?/);
+    const fname = match ? match[1] : 'logs_export.log';
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; a.click();
+    URL.revokeObjectURL(url);
+    closeModal('log-export-modal');
+    toast(format === 'encrypted' ? 'Logs exportados (cifrados)' : 'Logs exportados', 'success');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Exportar';
+  }
+}
+
+function openLogPurgeModal() {
+  openModal('log-purge-modal');
+}
+
+async function doLogPurge() {
+  const days = parseInt(document.getElementById('log-purge-days').value);
+  if (!confirm(`Eliminar permanentemente todos los logs anteriores a ${days} dias?`)) return;
+  try {
+    const r = await apiFetch('/api/logs/purge', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ days })
+    });
+    if (!r) return;
+    const j = await r.json();
+    if (j.success) {
+      toast(`${j.deleted} logs eliminados`, 'success');
+      closeModal('log-purge-modal');
+      loadLogs();
+    } else {
+      toast(j.error || 'Error', 'error');
+    }
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
 }
 
 // â”€â”€â”€ Page Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
