@@ -532,11 +532,31 @@
       </div>
       <div class="divider"></div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Cifrar</div></div>
-        <div class="toggle on" id="ts-enc" onclick="toggleOpt('ts-enc')"></div>
+        <div>
+          <div class="toggle-label">Cifrar backup</div>
+          <div class="toggle-sub">Protege los datos con cifrado</div>
+        </div>
+        <div class="toggle on" id="ts-enc" onclick="toggleOpt('ts-enc'); toggleScheduleCipherOpts()"></div>
+      </div>
+      <div id="s-cipher-options">
+        <div class="form-group full" style="margin-top:10px;">
+          <label>Metodo de cifrado</label>
+          <select id="s-cipher">
+            <option value="fernet">Fernet (AES-128-CBC + HMAC)</option>
+            <option value="aes-256-gcm">AES-256-GCM</option>
+            <option value="chacha20">ChaCha20-Poly1305</option>
+          </select>
+        </div>
+        <div class="form-group full" style="margin-top:6px;">
+          <label>Clave personalizada <span style="color:var(--text3);font-weight:400;">(opcional — si se deja vacio se usa la clave del admin)</span></label>
+          <input type="password" id="s-custom-key" placeholder="Clave especifica para estos backups">
+        </div>
       </div>
       <div class="toggle-row">
-        <div><div class="toggle-label">Comprimir</div></div>
+        <div>
+          <div class="toggle-label">Comprimir (gzip)</div>
+          <div class="toggle-sub">Reduce el tamano del archivo</div>
+        </div>
         <div class="toggle on" id="ts-comp" onclick="toggleOpt('ts-comp')"></div>
       </div>
     </div>
@@ -887,6 +907,9 @@ function toggleOpt(id) { document.getElementById(id).classList.toggle('on'); }
 function isOn(id) { return document.getElementById(id).classList.contains('on'); }
 function toggleCipherOpts() {
   document.getElementById('cipher-options').style.display = isOn('t-encrypt') ? '' : 'none';
+}
+function toggleScheduleCipherOpts() {
+  document.getElementById('s-cipher-options').style.display = isOn('ts-enc') ? '' : 'none';
 }
 
 // â”€â”€â”€ Format helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1513,14 +1536,16 @@ async function loadSchedules() {
   }
   const freqMap = { hourly:'Cada hora', daily:'Diario', weekly:'Semanal', monthly:'Mensual', yearly:'Anual', once:'Una vez' };
   const freqColor = { hourly:'badge-blue', daily:'badge-blue', weekly:'badge-blue', monthly:'badge-green', yearly:'badge-amber', once:'badge-purple' };
+  const cipherLabel = { fernet:'FERNET', 'aes-256-gcm':'AES-GCM', chacha20:'CHACHA20' };
   el.innerHTML = `<table>
-    <thead><tr><th>Conexion</th><th>Frecuencia</th><th>Hora</th><th>Cifrar</th><th>Comprimir</th><th>Retencion</th><th>Ultimo</th><th>Proximo</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th>Conexion</th><th>Frecuencia</th><th>Hora</th><th>Cifrar</th><th>Metodo</th><th>Comprimir</th><th>Retencion</th><th>Ultimo</th><th>Proximo</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>${schedules.map(s => `
       <tr>
         <td>${s.conn_name||'—'}</td>
         <td><span class="badge ${freqColor[s.frequency]||'badge-blue'}">${freqMap[s.frequency]||s.frequency}</span></td>
         <td class="mono" style="font-size:11px;">${s.frequency === 'hourly' ? '—' : (s.run_time || '00:00')}</td>
         <td>${s.encrypt?'<span class="badge badge-purple">Si</span>':'No'}</td>
+        <td>${s.encrypt ? '<span class="badge badge-purple">'+(cipherLabel[s.cipher_method]||'FERNET')+'</span>' : '—'}</td>
         <td>${s.compress?'<span class="badge badge-amber">Si</span>':'No'}</td>
         <td class="mono">${s.retain_days}d</td>
         <td class="mono" style="font-size:11px;">${fmtDate(s.last_run)}</td>
@@ -1577,6 +1602,11 @@ function openScheduleModal() {
     document.getElementById('s-freq').value = 'daily';
     document.getElementById('s-time').value = '00:00';
     document.getElementById('s-date').value = '';
+    document.getElementById('s-cipher').value = 'fernet';
+    document.getElementById('s-custom-key').value = '';
+    if (!isOn('ts-enc')) toggleOpt('ts-enc');
+    if (!isOn('ts-comp')) toggleOpt('ts-comp');
+    toggleScheduleCipherOpts();
     onFreqChange();
     openModal('schedule-modal');
   });
@@ -1604,7 +1634,9 @@ async function saveSchedule() {
       run_date:     runDate,
       encrypt:      isOn('ts-enc') ? 1 : 0,
       compress:     isOn('ts-comp') ? 1 : 0,
-      retain_days:  parseInt(document.getElementById('s-retain').value) || 30
+      retain_days:  parseInt(document.getElementById('s-retain').value) || 30,
+      cipher_method: document.getElementById('s-cipher').value,
+      custom_key:    document.getElementById('s-custom-key').value.trim()
     })
   });
   toast('Schedule creado', 'success');

@@ -1,6 +1,3 @@
-# Claude Code
-.claude/
-
 # Encryption key — never commit this
 vault.key
 

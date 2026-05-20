@@ -126,6 +126,7 @@ MYSQL_DB   = os.environ.get("MYSQL_DB", "backups0")
 
 MYSQLDUMP_PATH = os.environ.get("MYSQLDUMP_PATH", r"C:\Program Files\MySQL\MySQL Server 9.2\bin\mysqldump.exe")
 MYSQL_PATH     = os.environ.get("MYSQL_PATH", r"C:\Program Files\MySQL\MySQL Server 9.2\bin\mysql.exe")
+PGDUMP_PATH    = os.environ.get("PGDUMP_PATH", r"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe")
 
 def get_catalog_conn():
     return pymysql.connect(
@@ -337,6 +338,8 @@ def init_catalog():
             "ALTER TABLE backups DROP COLUMN connection_name",
             "ALTER TABLE backups ADD COLUMN cipher_method VARCHAR(30) DEFAULT 'fernet'",
             "ALTER TABLE backups ADD COLUMN custom_key_used TINYINT DEFAULT 0",
+            "ALTER TABLE schedules ADD COLUMN cipher_method VARCHAR(30) DEFAULT 'fernet'",
+            "ALTER TABLE schedules ADD COLUMN custom_key VARCHAR(512) DEFAULT ''",
             "ALTER TABLE schedules ADD CONSTRAINT fk_schedules_conn FOREIGN KEY(connection_id) REFERENCES connections(id) ON DELETE CASCADE",
         ]:
             try:
@@ -485,7 +488,7 @@ def do_backup(conn_id, encrypt=True, compress=True, password="dbvault2024", back
         elif db_type == "postgresql":
             env = os.environ.copy()
             env["PGPASSWORD"] = db_pass
-            cmd = ["pg_dump", "-h", host, "-p", str(port), "-U", username, database]
+            cmd = [PGDUMP_PATH, "-h", host, "-p", str(port), "-U", username, database]
             result = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
             if result.returncode != 0:
                 raise Exception(result.stderr.decode())
@@ -661,7 +664,18 @@ def run_scheduled_backups():
             for s in schedules:
                 next_run = s["next_run"]
                 if next_run and next_run <= now:
-                    do_backup(s["connection_id"], bool(s["encrypt"]), bool(s["compress"]), admin_key, backup_type="scheduled")
+                    # Use custom_key if set, otherwise admin_key
+                    sched_custom_key = ""
+                    if s.get("custom_key"):
+                        try:
+                            sched_custom_key = decrypt_db_key(s["custom_key"])
+                        except Exception:
+                            pass
+                    enc_password = sched_custom_key if sched_custom_key else admin_key
+                    sched_cipher = s.get("cipher_method") or "fernet"
+                    do_backup(s["connection_id"], bool(s["encrypt"]), bool(s["compress"]),
+                              enc_password, backup_type="scheduled", cipher_method=sched_cipher,
+                              custom_key_used=bool(sched_custom_key))
                     freq     = s["frequency"]
                     run_time = s.get("run_time") or "00:00"
                     db = get_catalog_conn()
@@ -1268,6 +1282,8 @@ def get_schedules():
             "frequency": r["frequency"], "run_time": r.get("run_time", "00:00"),
             "encrypt": r["encrypt"],
             "compress": r["compress"], "retain_days": r["retain_days"],
+            "cipher_method": r.get("cipher_method") or "fernet",
+            "has_custom_key": bool(r.get("custom_key")),
             "active": r["active"], "last_run": str(r["last_run"]) if r["last_run"] else None,
             "next_run": str(r["next_run"]) if r["next_run"] else None,
             "created_at": str(r["created_at"]), "conn_name": r["conn_name"]
@@ -1343,18 +1359,24 @@ def add_schedule():
     freq     = d.get("frequency", "daily")
     run_time = d.get("run_time", "00:00")
     run_date = d.get("run_date")
+    cipher_method = d.get("cipher_method", "fernet")
+    if cipher_method not in ("fernet", "aes-256-gcm", "chacha20"):
+        cipher_method = "fernet"
+    custom_key = d.get("custom_key", "").strip()
+    encrypted_custom_key = encrypt_db_key(custom_key) if custom_key else ""
     nxt      = calc_next_run(freq, run_time, run_date)
     db = get_catalog_conn()
     with db.cursor() as c:
         c.execute("""
-            INSERT INTO schedules (connection_id, frequency, run_time, encrypt, compress, retain_days, next_run)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            INSERT INTO schedules (connection_id, frequency, run_time, encrypt, compress, retain_days, next_run, cipher_method, custom_key)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (d["connection_id"], freq, run_time, int(d.get("encrypt", 1)),
-              int(d.get("compress", 1)), d.get("retain_days", 30), nxt))
+              int(d.get("compress", 1)), d.get("retain_days", 30), nxt,
+              cipher_method, encrypted_custom_key))
         sid = c.lastrowid
     db.commit()
     db.close()
-    log_event("INFO", f"Usuario '{session['user']}' creó schedule (conexión ID: {d['connection_id']}, frecuencia: {freq}, hora: {run_time})")
+    log_event("INFO", f"Usuario '{session['user']}' creó schedule (conexión ID: {d['connection_id']}, frecuencia: {freq}, hora: {run_time}, cifrado: {cipher_method})")
     return jsonify({"id": sid, "message": "Schedule created"})
 
 @app.route("/api/schedules/<int:sid>", methods=["PUT"])

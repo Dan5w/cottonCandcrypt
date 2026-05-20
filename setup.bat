@@ -20,7 +20,7 @@ if not exist "%~dp0venv\Scripts\python.exe" (
 
 :: ── Dependencias ────────────────────────────────
 echo [2/4] Instalando dependencias...
-"%~dp0venv\Scripts\pip.exe" install -r "%~dp0requirements.txt" --quiet
+"%~dp0venv\Scripts\python.exe" -m pip install -r "%~dp0requirements.txt" --quiet
 if errorlevel 1 (
     echo ERROR: Fallo al instalar dependencias.
     pause & exit /b 1
